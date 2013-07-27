@@ -85,6 +85,10 @@ type startMessage struct {
 	PublicKey string `json:"public_key"`
 }
 
+type stopMessage struct {
+	Session string `json:"session"`
+}
+
 func (a *Agent) HandleStarts(mbus go_cfmessagebus.CFMessageBus) error {
 	directedStart := fmt.Sprintf("ssh.%s.start", a.ID.String())
 
@@ -98,6 +102,20 @@ func (a *Agent) HandleStarts(mbus go_cfmessagebus.CFMessageBus) error {
 		}
 
 		go a.handleStart(start)
+	})
+}
+
+func (a *Agent) HandleStops(mbus go_cfmessagebus.CFMessageBus) error {
+	return mbus.Subscribe("ssh.stop", func(payload []byte) {
+		var stop stopMessage
+
+		err := json.Unmarshal(payload, &stop)
+		if err != nil {
+			log.Printf("Failed to unmarshal ssh start: %s\n", err)
+			return
+		}
+
+		go a.handleStop(stop)
 	})
 }
 
@@ -117,6 +135,14 @@ func (a *Agent) handleStart(start startMessage) {
 	err = sess.StartSSHServer()
 	if err != nil {
 		log.Printf("Failed to start SSH server: %s\n", err)
+		return
+	}
+}
+
+func (a *Agent) handleStop(stop stopMessage) {
+	err := a.StopSession(stop.Session)
+	if err != nil {
+		log.Printf("Failed to stop session: %s\n", err)
 		return
 	}
 }

@@ -73,13 +73,16 @@ func (s *ASuite) TestAgentIDIsUnique(c *C) {
 	c.Assert(agent1.ID, Not(Equals), agent2.ID)
 }
 
-func (s *ASuite) TestAgentHandlesStarts(c *C) {
+func (s *ASuite) TestAgentHandlesStartsAndStops(c *C) {
 	mbus := NewMockMessageBus()
 
 	agent, err := NewAgent("/tmp/warden.sock")
 	c.Assert(err, IsNil)
 
 	err = agent.HandleStarts(mbus)
+	c.Assert(err, IsNil)
+
+	err = agent.HandleStops(mbus)
 	c.Assert(err, IsNil)
 
 	directedStart := fmt.Sprintf("ssh.%s.start", agent.ID.String())
@@ -105,4 +108,18 @@ func (s *ASuite) TestAgentHandlesStarts(c *C) {
 	c.Assert(err, IsNil)
 
 	c.Assert(runningServer.ExitStatus, Equals, uint32(0))
+
+	mbus.Publish("ssh.stop", []byte(`{"session":"abc"}`))
+
+	// give agent time to set everything up
+	//
+	// TODO: less lazy solution
+	time.Sleep(1 * time.Second)
+
+	_, found = agent.Registry.Lookup("abc")
+	c.Assert(found, Equals, false)
+
+	_, err = sess.Container.Run("")
+	c.Assert(err, NotNil)
+	c.Assert(err.Error(), Equals, "unknown handle")
 }
