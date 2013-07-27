@@ -120,17 +120,33 @@ func (a *Agent) HandleStops(mbus go_cfmessagebus.CFMessageBus) error {
 }
 
 func (a *Agent) handleStart(start startMessage) {
+	log.Printf(
+		"creating session %s\n",
+		start.Session,
+	)
+
 	sess, err := a.StartSession(start.Session)
 	if err != nil {
 		log.Printf("Failed to create session: %s\n", err)
 		return
 	}
 
+	log.Printf(
+		"loading public key into session %s\n",
+		start.Session,
+	)
+
 	err = sess.LoadPublicKey(start.PublicKey)
 	if err != nil {
 		log.Printf("Failed to load public key: %s\n", err)
 		return
 	}
+
+	log.Printf(
+		"starting SSH server %s on port %d\n",
+		start.Session,
+		sess.Port,
+	)
 
 	err = sess.StartSSHServer()
 	if err != nil {
@@ -140,6 +156,11 @@ func (a *Agent) handleStart(start startMessage) {
 }
 
 func (a *Agent) handleStop(stop stopMessage) {
+	log.Printf(
+		"stopping session %s\n",
+		stop.Session,
+	)
+
 	err := a.StopSession(stop.Session)
 	if err != nil {
 		log.Printf("Failed to stop session: %s\n", err)

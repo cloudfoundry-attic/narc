@@ -123,3 +123,6 @@ func (s *ASuite) TestAgentHandlesStartsAndStops(c *C) {
 	c.Assert(err, NotNil)
 	c.Assert(err.Error(), Equals, "unknown handle")
 }
+
+// TODO: test for ssh.stop when backing container was destroyed out from
+// under it

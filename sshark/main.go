@@ -1,41 +1,45 @@
 package main
 
 import (
-	"fmt"
+	"github.com/cloudfoundry/go_cfmessagebus"
 	"github.com/cloudfoundry/sshark"
-	"io/ioutil"
 	"log"
-	"os"
 )
 
 func main() {
-	agent := sshark.NewAgent("/tmp/warden.sock")
-
-	pubkeyPath := fmt.Sprintf("%s/.ssh/id_rsa.pub", os.Getenv("HOME"))
-
-	pubkey, err := ioutil.ReadFile(pubkeyPath)
+	// TODO: rename package to just cfmessagebus
+	mbus, err := go_cfmessagebus.NewCFMessageBus("NATS")
 	if err != nil {
 		log.Fatal(err.Error())
 		return
 	}
 
-	sess, err := agent.StartSession("foo")
+	mbus.Configure("127.0.0.1", 4222, "", "")
+	err = mbus.Connect()
 	if err != nil {
 		log.Fatal(err.Error())
 		return
 	}
 
-	log.Println(sess.Port)
-
-	err = sess.LoadPublicKey(string(pubkey))
+	agent, err := sshark.NewAgent("/tmp/warden.sock")
 	if err != nil {
 		log.Fatal(err.Error())
 		return
 	}
 
-	err = sess.StartSSHServer()
+	log.Printf("agent ID: %s\n", agent.ID)
+
+	err = agent.HandleStarts(mbus)
 	if err != nil {
 		log.Fatal(err.Error())
 		return
 	}
+
+	err = agent.HandleStops(mbus)
+	if err != nil {
+		log.Fatal(err.Error())
+		return
+	}
+
+	select {}
 }
