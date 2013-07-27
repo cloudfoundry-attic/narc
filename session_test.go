@@ -80,14 +80,6 @@ func (c *FakeContainer) Destroy() error {
 	return nil
 }
 
-func (c *FakeContainer) Spawn(command string) (JobId, error) {
-	return 42, nil
-}
-
-func (c *FakeContainer) Stream(job JobId) (chan *StreamOutput, error) {
-	return make(chan *StreamOutput), nil
-}
-
 func (c *FakeContainer) Run(command string) (*JobInfo, error) {
 	if c.ShouldError {
 		return nil, errors.New("uh oh")
