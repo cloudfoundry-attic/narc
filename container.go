@@ -17,8 +17,6 @@ type JobInfo struct {
 
 type Container interface {
 	Destroy() error
-	Spawn(command string) (JobId, error)
-	Stream(job JobId) (chan *StreamOutput, error)
 	Run(command string) (*JobInfo, error)
 	NetIn() (MappedPort, error)
 }
