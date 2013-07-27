@@ -1,0 +1,67 @@
+                                 / |                ___
+                                /  (              /  /
+                 ______________/    \_________   /  /
+                /,   o                        `\/  /
+                  \/\/\  ||                       <
+                  /\/\/  || |                 _/\  \
+                  `-_________\   |____-------'   \__\
+                              \  |                
+                            _  \_|           _
+                    ___ ___| |__   __ _ _ __| | __
+                   / __/ __| '_ \ / _` | '__| |/ /
+                   \__ \__ \ | | | (_| | |  |   <
+                   |___/___/_| |_|\__,_|_|  |_|\_\
+
+
+
+= About
+
+Dynamic containerized SSH server provisioning.
+
+
+= Usage
+
+  PUB ssh.(sshark server id).start
+      
+    Provisions a SSH session on the given sshark server.
+
+    `sshark server id` is the unique identifier for the target server.
+
+    Payload: {"session":"(session id)","public_key":"(public key)"}
+
+      `session id` is a unique identifier for the session.
+      `public key` is the key to authorize access to the SSH server.
+
+  --------------------------------------------------
+
+  PUB ssh.stop
+
+    Terminate a SSH session. This destroys the container, shutting down the
+    SSH server and kicking everyone off.
+
+    Payload: {"session":"(session id)"}
+
+      `session id` is a unique identifier for the session.
+
+  --------------------------------------------------
+
+  SUB ssh.advertise
+    
+    Broadcasts the existence of a sshark server to other components in the
+    system. Will eventually include available memory/disk, to enable balanced
+    placement algorithms.
+
+    Sent periodically.
+
+    Payload: {"id":"(sshark server id)"}
+      `sshark server id` is a unique identifier for the sshark server.
+
+  --------------------------------------------------
+
+  SUB ssh.shutdown
+
+    Broadcasts that the sshark server is going to shut down, so that other
+    components may stop directing start requests at it.
+
+    Payload: {"id":"(sshark server id)"}
+      `sshark server id` is a unique identifier for the sshark server.
