@@ -5,8 +5,8 @@ import (
 )
 
 type Registry struct {
-	sessions  map[string]*Session
-	writeLock sync.Mutex
+	sessions map[string]*Session
+	lock     sync.RWMutex
 }
 
 func NewRegistry() *Registry {
@@ -16,20 +16,23 @@ func NewRegistry() *Registry {
 }
 
 func (r *Registry) Register(id string, session *Session) {
-	r.writeLock.Lock()
-	defer r.writeLock.Unlock()
+	r.lock.Lock()
+	defer r.lock.Unlock()
 
 	r.sessions[id] = session
 }
 
 func (r *Registry) Unregister(id string) {
-	r.writeLock.Lock()
-	defer r.writeLock.Unlock()
+	r.lock.Lock()
+	defer r.lock.Unlock()
 
 	delete(r.sessions, id)
 }
 
 func (r *Registry) Lookup(id string) (*Session, bool) {
+	r.lock.RLock()
+	defer r.lock.RUnlock()
+
 	val, ok := r.sessions[id]
 	return val, ok
 }
