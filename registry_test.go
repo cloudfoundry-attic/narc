@@ -4,13 +4,13 @@ import (
 	. "launchpad.net/gocheck"
 )
 
-type SSuite struct{}
+type RSuite struct{}
 
 func init() {
-	Suite(&SSuite{})
+	Suite(&RSuite{})
 }
 
-func (s *SSuite) TestRegisterCRUD(c *C) {
+func (s *RSuite) TestRegisterCRUD(c *C) {
 	registry := NewRegistry()
 	session := &Session{}
 
