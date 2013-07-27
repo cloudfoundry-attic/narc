@@ -1,7 +1,9 @@
 package sshark
 
 import (
+	"fmt"
 	. "launchpad.net/gocheck"
+	"time"
 )
 
 type ASuite struct{}
@@ -11,7 +13,8 @@ func init() {
 }
 
 func (s *ASuite) TestAgentSessionLifecycle(c *C) {
-	agent := NewAgent("/tmp/warden.sock")
+	agent, err := NewAgent("/tmp/warden.sock")
+	c.Assert(err, IsNil)
 
 	session, err := agent.StartSession("some-guid")
 	c.Assert(err, IsNil)
@@ -37,14 +40,17 @@ func (s *ASuite) TestAgentSessionLifecycle(c *C) {
 }
 
 func (s *ASuite) TestAgentTeardownNotExistantContainer(c *C) {
-	agent := NewAgent("/tmp/warden.sock")
-	err := agent.StopSession("some-guid")
+	agent, err := NewAgent("/tmp/warden.sock")
+	c.Assert(err, IsNil)
+
+	err = agent.StopSession("some-guid")
 	c.Assert(err, NotNil)
 	c.Assert(err.Error(), Equals, "session not registered")
 }
 
 func (s *ASuite) TestAgentTeardownAlreadyDestroyedContainer(c *C) {
-	agent := NewAgent("/tmp/warden.sock")
+	agent, err := NewAgent("/tmp/warden.sock")
+	c.Assert(err, IsNil)
 
 	session, err := agent.StartSession("some-guid")
 	c.Assert(err, IsNil)
@@ -55,4 +61,48 @@ func (s *ASuite) TestAgentTeardownAlreadyDestroyedContainer(c *C) {
 	err = agent.StopSession("some-guid")
 	c.Assert(err, NotNil)
 	c.Assert(err.Error(), Equals, "unknown handle")
+}
+
+func (s *ASuite) TestAgentIDIsUnique(c *C) {
+	agent1, err := NewAgent("")
+	c.Assert(err, IsNil)
+
+	agent2, err := NewAgent("")
+	c.Assert(err, IsNil)
+
+	c.Assert(agent1.ID, Not(Equals), agent2.ID)
+}
+
+func (s *ASuite) TestAgentHandlesStarts(c *C) {
+	mbus := NewMockMessageBus()
+
+	agent, err := NewAgent("/tmp/warden.sock")
+	c.Assert(err, IsNil)
+
+	err = agent.HandleStarts(mbus)
+	c.Assert(err, IsNil)
+
+	directedStart := fmt.Sprintf("ssh.%s.start", agent.ID.String())
+	mbus.Publish(directedStart, []byte(`
+    {"session":"abc","public_key":"hello im a pubkey"}
+  `))
+
+	// give agent time to set everything up
+	//
+	// TODO: less lazy solution
+	time.Sleep(1 * time.Second)
+
+	sess, found := agent.Registry.Lookup("abc")
+	c.Assert(found, Equals, true)
+
+	hasPubkey, err := sess.Container.Run("cat ~/.ssh/authorized_keys")
+	c.Assert(err, IsNil)
+
+	c.Assert(hasPubkey.ExitStatus, Equals, uint32(0))
+
+	checkPort := fmt.Sprintf("lsof -i :%d", sess.Port)
+	runningServer, err := sess.Container.Run(checkPort)
+	c.Assert(err, IsNil)
+
+	c.Assert(runningServer.ExitStatus, Equals, uint32(0))
 }

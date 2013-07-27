@@ -1,22 +1,34 @@
 package sshark
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
+	"github.com/cloudfoundry/go_cfmessagebus"
+	"github.com/nu7hatch/gouuid"
 	"github.com/vito/gordon"
+	"log"
 )
 
 type Agent struct {
+	ID               *uuid.UUID
 	Registry         *Registry
 	WardenSocketPath string
 }
 
 var SessionNotRegistered = errors.New("session not registered")
 
-func NewAgent(wardenSocketPath string) *Agent {
+func NewAgent(wardenSocketPath string) (*Agent, error) {
+	id, err := uuid.NewV4()
+	if err != nil {
+		return nil, err
+	}
+
 	return &Agent{
+		ID:               id,
 		Registry:         NewRegistry(),
 		WardenSocketPath: wardenSocketPath,
-	}
+	}, nil
 }
 
 func (a *Agent) StartSession(guid string) (*Session, error) {
@@ -66,4 +78,45 @@ func (a *Agent) StopSession(guid string) error {
 	a.Registry.Unregister(guid)
 
 	return nil
+}
+
+type startMessage struct {
+	Session   string `json:"session"`
+	PublicKey string `json:"public_key"`
+}
+
+func (a *Agent) HandleStarts(mbus go_cfmessagebus.CFMessageBus) error {
+	directedStart := fmt.Sprintf("ssh.%s.start", a.ID.String())
+
+	return mbus.Subscribe(directedStart, func(payload []byte) {
+		var start startMessage
+
+		err := json.Unmarshal(payload, &start)
+		if err != nil {
+			log.Printf("Failed to unmarshal ssh start: %s\n", err)
+			return
+		}
+
+		go a.handleStart(start)
+	})
+}
+
+func (a *Agent) handleStart(start startMessage) {
+	sess, err := a.StartSession(start.Session)
+	if err != nil {
+		log.Printf("Failed to create session: %s\n", err)
+		return
+	}
+
+	err = sess.LoadPublicKey(start.PublicKey)
+	if err != nil {
+		log.Printf("Failed to load public key: %s\n", err)
+		return
+	}
+
+	err = sess.StartSSHServer()
+	if err != nil {
+		log.Printf("Failed to start SSH server: %s\n", err)
+		return
+	}
 }
