@@ -13,10 +13,10 @@ type Agent struct {
 var SessionNotRegistered = errors.New("session not registered")
 
 func NewAgent(wardenSocketPath string) *Agent {
-  return &Agent{
-    Registry: NewRegistry(),
-    WardenSocketPath: wardenSocketPath,
-  }
+	return &Agent{
+		Registry:         NewRegistry(),
+		WardenSocketPath: wardenSocketPath,
+	}
 }
 
 func (a *Agent) StartSession(guid string) (*Session, error) {
