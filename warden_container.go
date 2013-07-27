@@ -21,6 +21,10 @@ func NewWardenContainer(client *warden.Client) (*WardenContainer, error) {
 	}, nil
 }
 
+func (c *WardenContainer) ID() string {
+	return c.Handle
+}
+
 func (c *WardenContainer) Destroy() error {
 	_, err := c.client.Destroy(c.Handle)
 	return err

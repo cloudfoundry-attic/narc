@@ -29,7 +29,7 @@ func (w *WCSuite) TestNewWardenContainer(c *C) {
 	wardenContainer, err := NewWardenContainer(client)
 	c.Assert(err, IsNil)
 
-	c.Assert(wardenContainer.Handle, Equals, "foo-handle")
+	c.Assert(wardenContainer.ID(), Equals, "foo-handle")
 
 	c.Assert(
 		string(fcp.WriteBuffer.Bytes()),

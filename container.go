@@ -7,6 +7,7 @@ type JobInfo struct {
 }
 
 type Container interface {
+	ID() string
 	Destroy() error
 	Run(command string) (*JobInfo, error)
 	NetIn() (MappedPort, error)

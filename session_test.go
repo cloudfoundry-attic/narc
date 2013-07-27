@@ -1,7 +1,6 @@
 package sshark
 
 import (
-	"errors"
 	. "launchpad.net/gocheck"
 )
 
@@ -69,27 +68,4 @@ func (s *SSuite) TestStartSSHServerFail(c *C) {
 
 	err := session.StartSSHServer()
 	c.Assert(err, NotNil)
-}
-
-type FakeContainer struct {
-	LastCommand string
-	ShouldError bool
-}
-
-func (c *FakeContainer) Destroy() error {
-	return nil
-}
-
-func (c *FakeContainer) Run(command string) (*JobInfo, error) {
-	if c.ShouldError {
-		return nil, errors.New("uh oh")
-	}
-
-	c.LastCommand = command
-
-	return &JobInfo{}, nil
-}
-
-func (c *FakeContainer) NetIn() (MappedPort, error) {
-	return 0, nil
 }

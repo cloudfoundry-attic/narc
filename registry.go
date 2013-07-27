@@ -1,6 +1,7 @@
 package sshark
 
 import (
+	"encoding/json"
 	"sync"
 )
 
@@ -35,4 +36,31 @@ func (r *Registry) Lookup(id string) (*Session, bool) {
 
 	val, ok := r.sessions[id]
 	return val, ok
+}
+
+type sessionJSON struct {
+	Port      MappedPort `json:"port"`
+	Container string     `json:"container"`
+}
+
+type registryJSON struct {
+	Sessions map[string]*sessionJSON `json:"sessions"`
+}
+
+func (r *Registry) MarshalJSON() ([]byte, error) {
+	r.lock.RLock()
+	defer r.lock.RUnlock()
+
+	registry := &registryJSON{
+		Sessions: make(map[string]*sessionJSON),
+	}
+
+	for id, session := range r.sessions {
+		registry.Sessions[id] = &sessionJSON{
+			Port:      session.Port,
+			Container: session.Container.ID(),
+		}
+	}
+
+	return json.Marshal(registry)
 }
