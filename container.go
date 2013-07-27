@@ -21,5 +21,4 @@ type Container interface {
 	Stream(job JobId) (chan *StreamOutput, error)
 	Run(command string) (*JobInfo, error)
 	NetIn() (MappedPort, error)
-	CopyIn(src, dst string) error
 }
