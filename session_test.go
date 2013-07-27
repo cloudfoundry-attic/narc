@@ -23,7 +23,7 @@ func (s *SSuite) TestSessionLoadPublicKeySuccess(c *C) {
 	c.Assert(err, IsNil)
 
 	c.Assert(container.LastCommand, Equals,
-		"echo 'super-secure' >> ~/.ssh/authorized_keys",
+		"mkdir ~/.ssh; echo 'super-secure' >> ~/.ssh/authorized_keys",
 	)
 }
 

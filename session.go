@@ -10,7 +10,7 @@ type Session struct {
 }
 
 func (s *Session) LoadPublicKey(publicKey string) error {
-	command := fmt.Sprintf("echo '%s' >> ~/.ssh/authorized_keys", publicKey)
+	command := fmt.Sprintf("mkdir ~/.ssh; echo '%s' >> ~/.ssh/authorized_keys", publicKey)
 	_, err := s.Container.Run(command)
 	return err
 }
