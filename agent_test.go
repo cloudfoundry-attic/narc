@@ -11,10 +11,7 @@ func init() {
 }
 
 func (s *ASuite) TestAgentSessionLifecycle(c *C) {
-	agent := &Agent{
-		Registry:         NewRegistry(),
-		WardenSocketPath: "/tmp/warden.sock",
-	}
+	agent := NewAgent("/tmp/warden.sock")
 
 	session, err := agent.StartSession("some-guid", "some public key")
 	c.Assert(err, IsNil)
@@ -40,21 +37,14 @@ func (s *ASuite) TestAgentSessionLifecycle(c *C) {
 }
 
 func (s *ASuite) TestAgentTeardownNotExistantContainer(c *C) {
-	agent := &Agent{
-		Registry:         NewRegistry(),
-		WardenSocketPath: "/tmp/warden.sock",
-	}
-
+	agent := NewAgent("/tmp/warden.sock")
 	err := agent.StopSession("some-guid")
 	c.Assert(err, NotNil)
 	c.Assert(err.Error(), Equals, "session not registered")
 }
 
 func (s *ASuite) TestAgentTeardownAlreadyDestroyedContainer(c *C) {
-	agent := &Agent{
-		Registry:         NewRegistry(),
-		WardenSocketPath: "/tmp/warden.sock",
-	}
+	agent := NewAgent("/tmp/warden.sock")
 
 	session, err := agent.StartSession("some-guid", "some public key")
 	c.Assert(err, IsNil)
