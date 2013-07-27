@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/cloudfoundry/go_cfmessagebus"
 	"github.com/cloudfoundry/sshark"
 	"io/ioutil"
 	"log"
