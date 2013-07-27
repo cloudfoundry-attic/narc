@@ -19,7 +19,7 @@ func NewAgent(wardenSocketPath string) *Agent {
   }
 }
 
-func (a *Agent) StartSession(guid, publicKey string) (*Session, error) {
+func (a *Agent) StartSession(guid string) (*Session, error) {
 	client := warden.NewClient(
 		&warden.ConnectionInfo{
 			SocketPath: a.WardenSocketPath,

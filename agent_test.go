@@ -13,7 +13,7 @@ func init() {
 func (s *ASuite) TestAgentSessionLifecycle(c *C) {
 	agent := NewAgent("/tmp/warden.sock")
 
-	session, err := agent.StartSession("some-guid", "some public key")
+	session, err := agent.StartSession("some-guid")
 	c.Assert(err, IsNil)
 
 	_, found := agent.Registry.Lookup("some-guid")
@@ -46,7 +46,7 @@ func (s *ASuite) TestAgentTeardownNotExistantContainer(c *C) {
 func (s *ASuite) TestAgentTeardownAlreadyDestroyedContainer(c *C) {
 	agent := NewAgent("/tmp/warden.sock")
 
-	session, err := agent.StartSession("some-guid", "some public key")
+	session, err := agent.StartSession("some-guid")
 	c.Assert(err, IsNil)
 
 	err = session.Container.Destroy()
