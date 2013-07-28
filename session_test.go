@@ -69,3 +69,23 @@ func (s *SSuite) TestStartSSHServerFail(c *C) {
 	err := session.StartSSHServer()
 	c.Assert(err, NotNil)
 }
+
+func (s *SSuite) TestSessionMarshalling(c *C) {
+	container := &FakeContainer{
+		Handle: "to-s-32",
+	}
+
+	session := &Session{
+		Container: container,
+		Port:      MappedPort(123),
+	}
+
+	json, err := session.MarshalJSON()
+	c.Assert(err, IsNil)
+
+	c.Assert(
+		string(json),
+		Equals,
+		`{"container":"to-s-32","port":123}`,
+	)
+}

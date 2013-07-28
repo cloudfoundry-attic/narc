@@ -38,12 +38,18 @@ func (s *RSuite) TestRegisterCRUD(c *C) {
 func (s *RSuite) TestRegistryMarshalling(c *C) {
 	registry := NewRegistry()
 
-	session := &Session{
+	session1 := &Session{
 		Container: &FakeContainer{Handle: "to-s-32"},
 		Port:      MappedPort(1111),
 	}
 
-	registry.Register("abc", session)
+	session2 := &Session{
+		Container: &FakeContainer{Handle: "to-s-64"},
+		Port:      MappedPort(2222),
+	}
+
+	registry.Register("abc", session1)
+	registry.Register("def", session2)
 
 	json, err := registry.MarshalJSON()
 	c.Assert(err, IsNil)
@@ -51,6 +57,6 @@ func (s *RSuite) TestRegistryMarshalling(c *C) {
 	c.Assert(
 		string(json),
 		Equals,
-		`{"sessions":{"abc":{"port":1111,"container":"to-s-32"}}}`,
+		`{"abc":{"container":"to-s-32","port":1111},"def":{"container":"to-s-64","port":2222}}`,
 	)
 }
