@@ -21,7 +21,11 @@ func main() {
 		return
 	}
 
-	agent, err := sshark.NewAgent("/tmp/warden.sock")
+	config := sshark.AgentConfig{
+		WardenSocketPath: "/tmp/warden.sock",
+	}
+
+	agent, err := sshark.NewAgent(config)
 	if err != nil {
 		log.Fatal(err.Error())
 		return

@@ -2,18 +2,28 @@ package sshark
 
 import (
 	"fmt"
+	"io/ioutil"
 	. "launchpad.net/gocheck"
 	"time"
 )
 
-type ASuite struct{}
+type ASuite struct {
+	Config AgentConfig
+}
 
 func init() {
 	Suite(&ASuite{})
 }
 
+func (s *ASuite) SetUpSuite(c *C) {
+	s.Config = AgentConfig{
+		WardenSocketPath: "/tmp/warden.sock",
+		StateFilePath:    "agent-test-state.json",
+	}
+}
+
 func (s *ASuite) TestAgentSessionLifecycle(c *C) {
-	agent, err := NewAgent("/tmp/warden.sock")
+	agent, err := NewAgent(s.Config)
 	c.Assert(err, IsNil)
 
 	session, err := agent.StartSession("some-guid")
@@ -40,7 +50,7 @@ func (s *ASuite) TestAgentSessionLifecycle(c *C) {
 }
 
 func (s *ASuite) TestAgentTeardownNotExistantContainer(c *C) {
-	agent, err := NewAgent("/tmp/warden.sock")
+	agent, err := NewAgent(s.Config)
 	c.Assert(err, IsNil)
 
 	err = agent.StopSession("some-guid")
@@ -49,7 +59,7 @@ func (s *ASuite) TestAgentTeardownNotExistantContainer(c *C) {
 }
 
 func (s *ASuite) TestAgentTeardownAlreadyDestroyedContainer(c *C) {
-	agent, err := NewAgent("/tmp/warden.sock")
+	agent, err := NewAgent(s.Config)
 	c.Assert(err, IsNil)
 
 	session, err := agent.StartSession("some-guid")
@@ -64,10 +74,10 @@ func (s *ASuite) TestAgentTeardownAlreadyDestroyedContainer(c *C) {
 }
 
 func (s *ASuite) TestAgentIDIsUnique(c *C) {
-	agent1, err := NewAgent("")
+	agent1, err := NewAgent(s.Config)
 	c.Assert(err, IsNil)
 
-	agent2, err := NewAgent("")
+	agent2, err := NewAgent(s.Config)
 	c.Assert(err, IsNil)
 
 	c.Assert(agent1.ID, Not(Equals), agent2.ID)
@@ -76,7 +86,7 @@ func (s *ASuite) TestAgentIDIsUnique(c *C) {
 func (s *ASuite) TestAgentHandlesStartsAndStops(c *C) {
 	mbus := NewMockMessageBus()
 
-	agent, err := NewAgent("/tmp/warden.sock")
+	agent, err := NewAgent(s.Config)
 	c.Assert(err, IsNil)
 
 	err = agent.HandleStarts(mbus)
@@ -127,8 +137,8 @@ func (s *ASuite) TestAgentHandlesStartsAndStops(c *C) {
 // TODO: test for ssh.stop when backing container was destroyed out from
 // under it
 
-func (s *RSuite) TestAgentMarshalling(c *C) {
-	agent, err := NewAgent("/tmp/warden.sock")
+func (s *ASuite) TestAgentMarshalling(c *C) {
+	agent, err := NewAgent(s.Config)
 	c.Assert(err, IsNil)
 
 	session1 := &Session{
@@ -152,4 +162,60 @@ func (s *RSuite) TestAgentMarshalling(c *C) {
 		Equals,
 		fmt.Sprintf(`{"id":"%s","sessions":{"abc":{"container":"to-s-32","port":1111},"def":{"container":"to-s-64","port":2222}}}`, agent.ID.String()),
 	)
+}
+
+func (s *ASuite) TestAgentStateSaving(c *C) {
+	agent, err := NewAgent(s.Config)
+	c.Assert(err, IsNil)
+
+	state, err := ioutil.ReadFile(s.Config.StateFilePath)
+	c.Assert(err, IsNil)
+
+	c.Assert(
+		string(state),
+		Equals,
+		fmt.Sprintf(
+			`{"id":"%s","sessions":{}}`,
+			agent.ID.String(),
+		),
+	)
+
+	session, err := agent.StartSession("abc")
+	c.Assert(err, IsNil)
+
+	state, err = ioutil.ReadFile(s.Config.StateFilePath)
+	c.Assert(err, IsNil)
+
+	c.Assert(
+		string(state),
+		Equals,
+		fmt.Sprintf(
+			`{"id":"%s","sessions":{"abc":{"container":"%s","port":%d}}}`,
+			agent.ID.String(),
+			session.Container.ID(),
+			session.Port,
+		),
+	)
+
+	err = agent.StopSession("abc")
+	c.Assert(err, IsNil)
+
+	state, err = ioutil.ReadFile(s.Config.StateFilePath)
+	c.Assert(err, IsNil)
+
+	c.Assert(
+		string(state),
+		Equals,
+		fmt.Sprintf(`{"id":"%s","sessions":{}}`, agent.ID.String()),
+	)
+}
+
+func (s *ASuite) TestAgentDisabledStateSaving(c *C) {
+  noStateConfig := AgentConfig{
+    WardenSocketPath: s.Config.WardenSocketPath,
+    StateFilePath: "",
+  }
+
+  _, err := NewAgent(noStateConfig)
+  c.Assert(err, IsNil)
 }

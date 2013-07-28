@@ -7,58 +7,49 @@ import (
 	"github.com/cloudfoundry/go_cfmessagebus"
 	"github.com/nu7hatch/gouuid"
 	"github.com/vito/gordon"
+	"io/ioutil"
 	"log"
 )
 
-type Agent struct {
-	ID               *uuid.UUID
-	Registry         *Registry
+type AgentConfig struct {
 	WardenSocketPath string
+	StateFilePath    string
+}
+
+type Agent struct {
+	ID       *uuid.UUID
+	Registry *Registry
+	Config   AgentConfig
 }
 
 var SessionNotRegistered = errors.New("session not registered")
 
-func NewAgent(wardenSocketPath string) (*Agent, error) {
+func NewAgent(config AgentConfig) (*Agent, error) {
 	id, err := uuid.NewV4()
 	if err != nil {
 		return nil, err
 	}
 
-	return &Agent{
-		ID:               id,
-		Registry:         NewRegistry(),
-		WardenSocketPath: wardenSocketPath,
-	}, nil
+	agent := &Agent{
+		ID:       id,
+		Registry: NewRegistry(),
+		Config:   config,
+	}
+
+	err = agent.writeState()
+
+	return agent, err
 }
 
 func (a *Agent) StartSession(guid string) (*Session, error) {
-	client := warden.NewClient(
-		&warden.ConnectionInfo{
-			SocketPath: a.WardenSocketPath,
-		},
-	)
-
-	err := client.Connect()
+	session, err := a.createSession()
 	if err != nil {
 		return nil, err
-	}
-
-	container, err := NewWardenContainer(client)
-	if err != nil {
-		return nil, err
-	}
-
-	port, err := container.NetIn()
-	if err != nil {
-		return nil, err
-	}
-
-	session := &Session{
-		Container: container,
-		Port:      port,
 	}
 
 	a.Registry.Register(guid, session)
+
+	err = a.writeState()
 
 	return session, err
 }
@@ -77,16 +68,9 @@ func (a *Agent) StopSession(guid string) error {
 
 	a.Registry.Unregister(guid)
 
-	return nil
-}
+	err = a.writeState()
 
-type startMessage struct {
-	Session   string `json:"session"`
-	PublicKey string `json:"public_key"`
-}
-
-type stopMessage struct {
-	Session string `json:"session"`
+	return err
 }
 
 func (a *Agent) HandleStarts(mbus go_cfmessagebus.CFMessageBus) error {
@@ -117,6 +101,43 @@ func (a *Agent) HandleStops(mbus go_cfmessagebus.CFMessageBus) error {
 
 		go a.handleStop(stop)
 	})
+}
+
+func (a *Agent) createSession() (*Session, error) {
+	client := warden.NewClient(
+		&warden.ConnectionInfo{
+			SocketPath: a.Config.WardenSocketPath,
+		},
+	)
+
+	err := client.Connect()
+	if err != nil {
+		return nil, err
+	}
+
+	container, err := NewWardenContainer(client)
+	if err != nil {
+		return nil, err
+	}
+
+	port, err := container.NetIn()
+	if err != nil {
+		return nil, err
+	}
+
+	return &Session{
+		Container: container,
+		Port:      port,
+	}, nil
+}
+
+type startMessage struct {
+	Session   string `json:"session"`
+	PublicKey string `json:"public_key"`
+}
+
+type stopMessage struct {
+	Session string `json:"session"`
 }
 
 func (a *Agent) handleStart(start startMessage) {
@@ -166,4 +187,17 @@ func (a *Agent) handleStop(stop stopMessage) {
 		log.Printf("Failed to stop session: %s\n", err)
 		return
 	}
+}
+
+func (a *Agent) writeState() error {
+	if a.Config.StateFilePath == "" {
+	  return nil
+	}
+
+	json, err := a.MarshalJSON()
+	if err != nil {
+		return err
+	}
+
+	return ioutil.WriteFile(a.Config.StateFilePath, json, 0644)
 }
