@@ -96,7 +96,7 @@ func message2type(msg proto.Message) int32 {
 	case *warden.DestroyRequest, *warden.DestroyResponse:
 		return 13
 	case *warden.InfoRequest, *warden.InfoResponse:
-		return 13
+		return 14
 
 	case *warden.SpawnRequest, *warden.SpawnResponse:
 		return 21
