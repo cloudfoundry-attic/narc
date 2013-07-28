@@ -211,11 +211,11 @@ func (s *ASuite) TestAgentStateSaving(c *C) {
 }
 
 func (s *ASuite) TestAgentDisabledStateSaving(c *C) {
-  noStateConfig := AgentConfig{
-    WardenSocketPath: s.Config.WardenSocketPath,
-    StateFilePath: "",
-  }
+	noStateConfig := AgentConfig{
+		WardenSocketPath: s.Config.WardenSocketPath,
+		StateFilePath:    "",
+	}
 
-  _, err := NewAgent(noStateConfig)
-  c.Assert(err, IsNil)
+	_, err := NewAgent(noStateConfig)
+	c.Assert(err, IsNil)
 }

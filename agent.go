@@ -191,7 +191,7 @@ func (a *Agent) handleStop(stop stopMessage) {
 
 func (a *Agent) writeState() error {
 	if a.Config.StateFilePath == "" {
-	  return nil
+		return nil
 	}
 
 	json, err := a.MarshalJSON()
