@@ -1,0 +1,8 @@
+message_bus:
+  host: 127.0.0.1
+  port: 4222
+  username:
+  password:
+
+warden_socket: /tmp/warden.sock
+state_file: /tmp/sshark.json

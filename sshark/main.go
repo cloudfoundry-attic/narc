@@ -1,31 +1,50 @@
 package main
 
 import (
+	"flag"
 	"github.com/cloudfoundry/go_cfmessagebus"
 	"github.com/cloudfoundry/sshark"
 	"log"
 )
 
+var configFile = flag.String("config", "", "path to config file")
+
 func main() {
-	// TODO: rename package to just cfmessagebus
+	flag.Parse()
+
+	var config sshark.Config
+
+	if *configFile != "" {
+		config = sshark.LoadConfig(*configFile)
+	} else {
+		config = sshark.DefaultConfig
+	}
+
 	mbus, err := go_cfmessagebus.NewCFMessageBus("NATS")
 	if err != nil {
 		log.Fatal(err.Error())
 		return
 	}
 
-	mbus.Configure("127.0.0.1", 4222, "", "")
+	mbus.Configure(
+		config.MessageBus.Host,
+		config.MessageBus.Port,
+		config.MessageBus.Username,
+		config.MessageBus.Password,
+	)
+
 	err = mbus.Connect()
 	if err != nil {
 		log.Fatal(err.Error())
 		return
 	}
 
-	config := sshark.AgentConfig{
-		WardenSocketPath: "/tmp/warden.sock",
+	agentConfig := sshark.AgentConfig{
+		WardenSocketPath: config.WardenSocketPath,
+		StateFilePath:    config.StateFilePath,
 	}
 
-	agent, err := sshark.NewAgent(config)
+	agent, err := sshark.NewAgent(agentConfig)
 	if err != nil {
 		log.Fatal(err.Error())
 		return
