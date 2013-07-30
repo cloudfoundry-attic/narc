@@ -73,7 +73,7 @@ func (a *Agent) StopSession(guid string) error {
 	return err
 }
 
-func (a *Agent) HandleStarts(mbus go_cfmessagebus.CFMessageBus) error {
+func (a *Agent) HandleStarts(mbus cfmessagebus.MessageBus) error {
 	directedStart := fmt.Sprintf("ssh.%s.start", a.ID.String())
 
 	return mbus.Subscribe(directedStart, func(payload []byte) {
@@ -89,7 +89,7 @@ func (a *Agent) HandleStarts(mbus go_cfmessagebus.CFMessageBus) error {
 	})
 }
 
-func (a *Agent) HandleStops(mbus go_cfmessagebus.CFMessageBus) error {
+func (a *Agent) HandleStops(mbus cfmessagebus.MessageBus) error {
 	return mbus.Subscribe("ssh.stop", func(payload []byte) {
 		var stop stopMessage
 

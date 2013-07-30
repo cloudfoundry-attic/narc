@@ -2,6 +2,7 @@ package sshark
 
 import (
 	"fmt"
+	"github.com/cloudfoundry/go_cfmessagebus/mock_cfmessagebus"
 	"io/ioutil"
 	. "launchpad.net/gocheck"
 	"time"
@@ -84,7 +85,7 @@ func (s *ASuite) TestAgentIDIsUnique(c *C) {
 }
 
 func (s *ASuite) TestAgentHandlesStartsAndStops(c *C) {
-	mbus := NewMockMessageBus()
+	mbus := mock_cfmessagebus.NewMockMessageBus()
 
 	agent, err := NewAgent(s.Config)
 	c.Assert(err, IsNil)
