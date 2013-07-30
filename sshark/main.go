@@ -20,7 +20,7 @@ func main() {
 		config = sshark.DefaultConfig
 	}
 
-	mbus, err := go_cfmessagebus.NewCFMessageBus("NATS")
+	mbus, err := cfmessagebus.NewMessageBus("NATS")
 	if err != nil {
 		log.Fatal(err.Error())
 		return
