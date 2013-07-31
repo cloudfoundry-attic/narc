@@ -42,26 +42,3 @@ Dynamic containerized SSH server provisioning.
     Payload: {"session":"(session id)"}
 
       `session id` is a unique identifier for the session.
-
-  --------------------------------------------------
-
-  SUB ssh.advertise
-    
-    Broadcasts the existence of a sshark server to other components in the
-    system. Will eventually include available memory/disk, to enable balanced
-    placement algorithms.
-
-    Sent periodically.
-
-    Payload: {"id":"(sshark server id)"}
-      `sshark server id` is a unique identifier for the sshark server.
-
-  --------------------------------------------------
-
-  SUB ssh.shutdown
-
-    Broadcasts that the sshark server is going to shut down, so that other
-    components may stop directing start requests at it.
-
-    Payload: {"id":"(sshark server id)"}
-      `sshark server id` is a unique identifier for the sshark server.
