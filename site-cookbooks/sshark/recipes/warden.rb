@@ -1,8 +1,9 @@
 include_recipe "runit"
 include_recipe "sshark::rbenv"
-include_recipe "sshark::gvm" # for curl
 
-%w{ build-essential debootstrap quota iptables }.each { |package_name| package package_name }
+%w{build-essential curl debootstrap quota iptables}.each do |package_name|
+  package package_name
+end
 
 rbenv_gem "bundler"
 
@@ -22,24 +23,30 @@ end
 
 execute "Install RootFS" do
   cwd "/opt/warden/rootfs"
+
   command "curl http://cfstacks.s3.amazonaws.com/lucid64.dev.tgz | tar zxf -"
   action :run
+
+  not_if "test -d /opt/warden/rootfs/usr"
 end
 
 execute "Install Dropbear" do
-  # pending; need to use rootfs's glibc
-  next
-
   cwd "/opt/warden/rootfs"
 
   command <<-CMD
-    ROOTFS=$PWD
+    set -e
+
     curl https://matt.ucc.asn.au/dropbear/releases/dropbear-2013.58.tar.bz2 | tar jxf -
-    cd dropbear*
-    ./configure && make
-    cp dropbear $ROOTFS/usr/bin
-    cp dropbearkey $ROOTFS/usr/bin
-    rm -rf dropbear*
+    mv dropbear-* dropbear_build
+
+    echo "cd dropbear_build && ./configure && make" > install-dropbear
+    chmod +x install-dropbear
+    chroot /opt/warden/rootfs /install-dropbear
+
+    cp dropbear_build/dropbear usr/bin
+    cp dropbear_build/dropbearkey usr/bin
+
+    rm -rf dropbear_build
   CMD
 
   action :run
@@ -47,10 +54,8 @@ execute "Install Dropbear" do
   not_if "test -f /opt/warden/rootfs/usr/bin/dropbear"
 end
 
-%w(warden.yml).each do |config_file|
-  cookbook_file "/opt/warden/config/#{config_file}" do
-    owner "vagrant"
-  end
+cookbook_file "/opt/warden/config/warden.yml" do
+  owner "vagrant"
 end
 
 execute "rbenv rehash"
@@ -61,9 +66,7 @@ execute "setup_warden" do
   action :run
 end
 
-%w(warden).each do |service_name|
-  runit_service service_name do
-    default_logger true
-    options({:user => "vagrant"})
-  end
+runit_service "warden" do
+  default_logger true
+  options(:user => "vagrant")
 end

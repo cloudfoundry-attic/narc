@@ -1,11 +1,7 @@
 include_recipe "build-essential"
 
-package "curl" do
-  action :install
-end
-
-bash "install Mercurial & Bazaar" do
-  code "apt-get -q -y install mercurial bzr"
+%w{curl mercurial bzr}.each do |package_name|
+  package package_name
 end
 
 bash "install GVM" do
