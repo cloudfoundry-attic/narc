@@ -1,0 +1,4 @@
+.vagrant/
+agent-test-state.json
+cookbooks/
+tmp/

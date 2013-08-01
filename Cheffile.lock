@@ -1,0 +1,37 @@
+SITE
+  remote: http://community.opscode.com/api/v1
+  specs:
+    apt (1.7.0)
+    build-essential (1.4.0)
+    chef_handler (1.1.4)
+    dmg (1.1.0)
+    git (2.5.2)
+      build-essential (>= 0.0.0)
+      dmg (>= 0.0.0)
+      runit (>= 1.0)
+      windows (>= 0.0.0)
+      yum (>= 0.0.0)
+    ohai (1.1.10)
+    runit (1.1.6)
+      build-essential (>= 0.0.0)
+      yum (>= 0.0.0)
+    windows (1.10.0)
+      chef_handler (>= 0.0.0)
+    yum (2.3.0)
+
+GIT
+  remote: https://github.com/cloudfoundry/rbenv-cookbook.git
+  ref: master
+  sha: f923e0eea6f4da8bf27a6d459c0433223439d4ee
+  specs:
+    rbenv (1.4.2)
+      build-essential (>= 0.0.0)
+      git (>= 0.0.0)
+      ohai (>= 1.1)
+
+DEPENDENCIES
+  apt (= 1.7.0)
+  git (>= 0)
+  rbenv (>= 0)
+  runit (>= 0)
+

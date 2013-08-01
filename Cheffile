@@ -1,0 +1,6 @@
+site "http://community.opscode.com/api/v1"
+
+cookbook "apt", "1.7.0"
+cookbook "git"
+cookbook "runit"
+cookbook "rbenv", :git => "https://github.com/cloudfoundry/rbenv-cookbook.git"
