@@ -1,11 +1,12 @@
 include_recipe "runit"
-include_recipe "sshark::rbenv"
 
-%w{build-essential curl debootstrap quota iptables}.each do |package_name|
+%w{build-essential git curl debootstrap quota iptables ruby1.9.3}.each do |package_name|
   package package_name
 end
 
-rbenv_gem "bundler"
+gem_package "bundler" do
+  gem_binary "/usr/bin/gem"
+end
 
 git "/opt/warden" do
   repository "git://github.com/cloudfoundry/warden.git"
@@ -58,11 +59,9 @@ cookbook_file "/opt/warden/config/warden.yml" do
   owner "vagrant"
 end
 
-execute "rbenv rehash"
-
 execute "setup_warden" do
   cwd "/opt/warden/warden"
-  command "/opt/rbenv/shims/bundle install && /opt/rbenv/shims/bundle exec rake setup:bin[/opt/warden/config/warden.yml]"
+  command "bundle install && bundle exec rake setup:bin[/opt/warden/config/warden.yml]"
   action :run
 end
 

@@ -1,7 +1,7 @@
 Vagrant.configure("2") do |config|
   config.vm.hostname = "sshark"
 
-  config.vm.box = "precise64"
+  config.vm.box = "sshark-precise64"
   config.vm.box_url = "http://files.vagrantup.com/precise64.box"
 
   config.vm.synced_folder ENV["GOPATH"], "/workspace"
@@ -19,6 +19,8 @@ Vagrant.configure("2") do |config|
 
   config.vm.network :private_network, ip: "192.168.50.4"
   # config.vm.provision :shell,       :path => "scripts/virtualbox_lucid_customize.sh"
+
+  config.vm.provision :shell, :inline => "gem install chef --version 10.26.0 --no-rdoc --no-ri --conservative"
 
   config.vm.provision :chef_solo do |chef|
     chef.cookbooks_path = ["cookbooks", "site-cookbooks"]
