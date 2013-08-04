@@ -1,7 +1,36 @@
+ROOT_FS_URL = "http://cfstacks.s3.amazonaws.com/lucid64.dev.tgz"
+
 include_recipe "runit"
 
-%w{build-essential git curl debootstrap quota iptables ruby1.9.3}.each do |package_name|
+%w{
+  git
+  curl
+  debootstrap
+  iptables
+  ruby1.9.3
+}.each do |package_name|
   package package_name
+end
+
+if ["debian", "ubuntu"].include?(node["platform"])
+  if node["kernel"]["release"].end_with? "virtual"
+    package "linux-image-extra" do
+      package_name "linux-image-extra-#{node['kernel']['release']}"
+      action :install
+    end
+  end
+end
+
+package "quota" do
+  action :install
+end
+
+package "apparmor" do
+  action :remove
+end
+
+execute "remove remove all remnants of apparmor" do
+  command "sudo dpkg --purge apparmor"
 end
 
 gem_package "bundler" do
@@ -10,7 +39,6 @@ end
 
 git "/opt/warden" do
   repository "git://github.com/cloudfoundry/warden.git"
-  revision "9712451911c7a0fad149f83895169a4062c47fc3" #"2ab01c5fed198ee451837b062f0e02e783519289"
   action :sync
 end
 
@@ -25,7 +53,7 @@ end
 execute "Install RootFS" do
   cwd "/opt/warden/rootfs"
 
-  command "curl http://cfstacks.s3.amazonaws.com/lucid64.dev.tgz | tar zxf -"
+  command "curl -s #{ROOT_FS_URL} | tar zxf -"
   action :run
 
   not_if "test -d /opt/warden/rootfs/usr"
