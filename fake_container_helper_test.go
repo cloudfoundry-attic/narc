@@ -31,3 +31,15 @@ func (c *FakeContainer) Run(command string) (*JobInfo, error) {
 func (c *FakeContainer) NetIn() (MappedPort, error) {
 	return 0, nil
 }
+
+func (c *FakeContainer) LimitMemory(limit uint64) error {
+	return nil
+}
+
+func (c *FakeContainer) LimitDisk(limit uint64) error {
+	return nil
+}
+
+func (c *FakeContainer) Info() (*ContainerInfo, error) {
+	return &ContainerInfo{}, nil
+}

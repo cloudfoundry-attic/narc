@@ -27,7 +27,13 @@ func (s *ASuite) TestAgentSessionLifecycle(c *C) {
 	agent, err := NewAgent(s.Config)
 	c.Assert(err, IsNil)
 
-	session, err := agent.StartSession("some-guid")
+	session, err := agent.StartSession(
+		"some-guid",
+		SessionLimits{
+			MemoryLimitInBytes: uint64(32 * 1024 * 1024),
+		},
+	)
+
 	c.Assert(err, IsNil)
 
 	_, found := agent.Registry.Lookup("some-guid")
@@ -50,6 +56,55 @@ func (s *ASuite) TestAgentSessionLifecycle(c *C) {
 	c.Assert(err, NotNil)
 }
 
+func (s *ASuite) TestAgentSessionMemoryLimitsMakesSessionDie(c *C) {
+	agent, err := NewAgent(s.Config)
+	c.Assert(err, IsNil)
+
+	session, err := agent.StartSession(
+		"some-guid",
+		SessionLimits{
+			MemoryLimitInBytes: uint64(32 * 1024 * 1024),
+		},
+	)
+
+	c.Assert(err, IsNil)
+
+	allocate, err := session.Container.Run(`ruby -e "'a'*10*1024*1024"`)
+	c.Assert(err, IsNil)
+	c.Assert(allocate.ExitStatus, Equals, uint32(0))
+
+	allocate, err = session.Container.Run(`ruby -e "'a'*33*1024*1024"`)
+	c.Assert(err, IsNil)
+	c.Assert(allocate.ExitStatus, Equals, uint32(137)) // via kill -9
+}
+
+func (s *ASuite) TestAgentSessionDiskLimitsEnforcesQuota(c *C) {
+	agent, err := NewAgent(s.Config)
+	c.Assert(err, IsNil)
+
+	session, err := agent.StartSession(
+		"some-guid",
+		SessionLimits{
+			MemoryLimitInBytes: uint64(32 * 1024 * 1024),
+			DiskLimitInBytes:   uint64(128 * 1024),
+		},
+	)
+
+	c.Assert(err, IsNil)
+
+	allocate64, err := session.Container.Run(`ruby -e "print('a' * 1024 * 64)" > foo.txt`)
+	c.Assert(err, IsNil)
+	c.Assert(allocate64.ExitStatus, Equals, uint32(0))
+
+	checkSize, err := session.Container.Run(`test $(du foo.txt | awk '{print $1}') = 64`)
+	c.Assert(err, IsNil)
+	c.Assert(checkSize.ExitStatus, Equals, uint32(0))
+
+	allocate256, err := session.Container.Run(`ruby -e "print('a' * 1024 * 256)" > foo.txt`)
+	c.Assert(err, IsNil)
+	c.Assert(allocate256.ExitStatus, Equals, uint32(1))
+}
+
 func (s *ASuite) TestAgentTeardownNotExistantContainer(c *C) {
 	agent, err := NewAgent(s.Config)
 	c.Assert(err, IsNil)
@@ -63,7 +118,13 @@ func (s *ASuite) TestAgentTeardownAlreadyDestroyedContainer(c *C) {
 	agent, err := NewAgent(s.Config)
 	c.Assert(err, IsNil)
 
-	session, err := agent.StartSession("some-guid")
+	session, err := agent.StartSession(
+		"some-guid",
+		SessionLimits{
+			MemoryLimitInBytes: uint64(32 * 1024 * 1024),
+		},
+	)
+
 	c.Assert(err, IsNil)
 
 	err = session.Container.Destroy()
@@ -98,8 +159,8 @@ func (s *ASuite) TestAgentHandlesStartsAndStops(c *C) {
 
 	directedStart := fmt.Sprintf("ssh.%s.start", agent.ID.String())
 	mbus.Publish(directedStart, []byte(`
-    {"session":"abc","public_key":"hello im a pubkey"}
-  `))
+	    {"session":"abc","public_key":"hello im a pubkey","limits":{"memory":128}}
+	`))
 
 	// give agent time to set everything up
 	//
@@ -111,14 +172,16 @@ func (s *ASuite) TestAgentHandlesStartsAndStops(c *C) {
 
 	hasPubkey, err := sess.Container.Run("cat ~/.ssh/authorized_keys")
 	c.Assert(err, IsNil)
-
 	c.Assert(hasPubkey.ExitStatus, Equals, uint32(0))
 
 	checkPort := fmt.Sprintf("lsof -i :%d", sess.Port)
 	runningServer, err := sess.Container.Run(checkPort)
 	c.Assert(err, IsNil)
-
 	c.Assert(runningServer.ExitStatus, Equals, uint32(0))
+
+	info, err := sess.Container.Info()
+	c.Assert(err, IsNil)
+	c.Assert(info.MemoryLimitInBytes, Equals, uint64(128*1024*1024))
 
 	mbus.Publish("ssh.stop", []byte(`{"session":"abc"}`))
 
@@ -181,7 +244,12 @@ func (s *ASuite) TestAgentStateSaving(c *C) {
 		),
 	)
 
-	session, err := agent.StartSession("abc")
+	session, err := agent.StartSession(
+		"abc",
+		SessionLimits{
+			MemoryLimitInBytes: uint64(32 * 1024 * 1024),
+		},
+	)
 	c.Assert(err, IsNil)
 
 	state, err = ioutil.ReadFile(s.Config.StateFilePath)

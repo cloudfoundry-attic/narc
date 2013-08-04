@@ -49,3 +49,26 @@ func (c *WardenContainer) NetIn() (MappedPort, error) {
 
 	return MappedPort(res.GetHostPort()), nil
 }
+
+func (c *WardenContainer) LimitMemory(limit uint64) error {
+	_, err := c.client.LimitMemory(c.Handle, limit)
+
+	return err
+}
+
+func (c *WardenContainer) LimitDisk(limit uint64) error {
+	_, err := c.client.LimitDisk(c.Handle, limit)
+
+	return err
+}
+
+func (c *WardenContainer) Info() (*ContainerInfo, error) {
+	info, err := c.client.Info(c.Handle)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ContainerInfo{
+		MemoryLimitInBytes: info.GetMemoryStat().GetHierarchicalMemoryLimit(),
+	}, nil
+}

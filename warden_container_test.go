@@ -110,6 +110,115 @@ func (w *WCSuite) TestContainerDestroyingFailure(c *C) {
 	c.Assert(err.Error(), Equals, "unknown handle")
 }
 
+func (w *WCSuite) TestContainerLimitingMemory(c *C) {
+	fcp := &FakeConnectionProvider{
+		ReadBuffer: messages(
+			&warden.CreateResponse{Handle: proto.String("foo-handle")},
+			&warden.LimitMemoryResponse{},
+		),
+		WriteBuffer: bytes.NewBuffer([]byte{}),
+	}
+
+	client := warden.NewClient(fcp)
+
+	err := client.Connect()
+	c.Assert(err, IsNil)
+
+	wardenContainer, err := NewWardenContainer(client)
+	c.Assert(err, IsNil)
+
+	err = wardenContainer.LimitMemory(1234)
+	c.Assert(err, IsNil)
+
+	c.Assert(
+		string(fcp.WriteBuffer.Bytes()),
+		Equals,
+		string(
+			messages(
+				&warden.CreateRequest{},
+				&warden.LimitMemoryRequest{
+					Handle:       proto.String("foo-handle"),
+					LimitInBytes: proto.Uint64(1234),
+				},
+			).Bytes(),
+		),
+	)
+}
+
+func (w *WCSuite) TestContainerLimitingDisk(c *C) {
+	fcp := &FakeConnectionProvider{
+		ReadBuffer: messages(
+			&warden.CreateResponse{Handle: proto.String("foo-handle")},
+			&warden.LimitDiskResponse{},
+		),
+		WriteBuffer: bytes.NewBuffer([]byte{}),
+	}
+
+	client := warden.NewClient(fcp)
+
+	err := client.Connect()
+	c.Assert(err, IsNil)
+
+	wardenContainer, err := NewWardenContainer(client)
+	c.Assert(err, IsNil)
+
+	err = wardenContainer.LimitDisk(1234)
+	c.Assert(err, IsNil)
+
+	c.Assert(
+		string(fcp.WriteBuffer.Bytes()),
+		Equals,
+		string(
+			messages(
+				&warden.CreateRequest{},
+				&warden.LimitDiskRequest{
+					Handle:    proto.String("foo-handle"),
+					ByteLimit: proto.Uint64(1234),
+				},
+			).Bytes(),
+		),
+	)
+}
+
+func (w *WCSuite) TestContainerGettingInfo(c *C) {
+	fcp := &FakeConnectionProvider{
+		ReadBuffer: messages(
+			&warden.CreateResponse{Handle: proto.String("foo-handle")},
+			&warden.InfoResponse{
+				MemoryStat: &warden.InfoResponse_MemoryStat{
+					HierarchicalMemoryLimit: proto.Uint64(102400),
+				},
+			},
+		),
+		WriteBuffer: bytes.NewBuffer([]byte{}),
+	}
+
+	client := warden.NewClient(fcp)
+
+	err := client.Connect()
+	c.Assert(err, IsNil)
+
+	wardenContainer, err := NewWardenContainer(client)
+	c.Assert(err, IsNil)
+
+	info, err := wardenContainer.Info()
+	c.Assert(err, IsNil)
+	c.Assert(info.MemoryLimitInBytes, Equals, uint64(102400))
+
+	c.Assert(
+		string(fcp.WriteBuffer.Bytes()),
+		Equals,
+		string(
+			messages(
+				&warden.CreateRequest{},
+				&warden.InfoRequest{
+					Handle: proto.String("foo-handle"),
+				},
+			).Bytes(),
+		),
+	)
+}
+
 func (w *WCSuite) TestRun(c *C) {
 	firstWriteBuf := bytes.NewBuffer([]byte{})
 	secondWriteBuf := bytes.NewBuffer([]byte{})

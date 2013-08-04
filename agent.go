@@ -41,8 +41,8 @@ func NewAgent(config AgentConfig) (*Agent, error) {
 	return agent, err
 }
 
-func (a *Agent) StartSession(guid string) (*Session, error) {
-	session, err := a.createSession()
+func (a *Agent) StartSession(guid string, limits SessionLimits) (*Session, error) {
+	session, err := a.createSession(limits)
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +103,7 @@ func (a *Agent) HandleStops(mbus cfmessagebus.MessageBus) error {
 	})
 }
 
-func (a *Agent) createSession() (*Session, error) {
+func (a *Agent) createSession(limits SessionLimits) (*Session, error) {
 	client := warden.NewClient(
 		&warden.ConnectionInfo{
 			SocketPath: a.Config.WardenSocketPath,
@@ -125,15 +125,31 @@ func (a *Agent) createSession() (*Session, error) {
 		return nil, err
 	}
 
+	err = container.LimitMemory(limits.MemoryLimitInBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	err = container.LimitDisk(limits.DiskLimitInBytes)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Session{
 		Container: container,
 		Port:      port,
 	}, nil
 }
 
+type sessionLimitsMessage struct {
+	MemoryInMegabytes uint64 `json:"memory"`
+	DiskInMegabytes   uint64 `json:"disk"`
+}
+
 type startMessage struct {
-	Session   string `json:"session"`
-	PublicKey string `json:"public_key"`
+	Session   string               `json:"session"`
+	PublicKey string               `json:"public_key"`
+	Limits    sessionLimitsMessage `json:"limits"`
 }
 
 type stopMessage struct {
@@ -146,7 +162,12 @@ func (a *Agent) handleStart(start startMessage) {
 		start.Session,
 	)
 
-	sess, err := a.StartSession(start.Session)
+	limits := SessionLimits{
+		MemoryLimitInBytes: start.Limits.MemoryInMegabytes * 1024 * 1024,
+		DiskLimitInBytes:   start.Limits.DiskInMegabytes * 1024 * 1024,
+	}
+
+	sess, err := a.StartSession(start.Session, limits)
 	if err != nil {
 		log.Printf("Failed to create session: %s\n", err)
 		return

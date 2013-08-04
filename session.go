@@ -9,6 +9,11 @@ type Session struct {
 	Port      MappedPort
 }
 
+type SessionLimits struct {
+	MemoryLimitInBytes uint64
+	DiskLimitInBytes   uint64
+}
+
 func (s *Session) LoadPublicKey(publicKey string) error {
 	command := fmt.Sprintf("mkdir ~/.ssh; echo '%s' >> ~/.ssh/authorized_keys", publicKey)
 	_, err := s.Container.Run(command)
