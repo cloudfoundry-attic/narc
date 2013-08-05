@@ -4,9 +4,15 @@ import (
 	"encoding/json"
 )
 
+type sessionLimitsJSON struct {
+	MemoryLimitInMegabytes uint64 `json:"memory"`
+	DiskLimitInMegabytes   uint64 `json:"disk"`
+}
+
 type sessionJSON struct {
-	Container string     `json:"container"`
-	Port      MappedPort `json:"port"`
+	Container string            `json:"container"`
+	Port      MappedPort        `json:"port"`
+	Limits    sessionLimitsJSON `json:"limits"`
 }
 
 type agentJSON struct {
@@ -15,10 +21,7 @@ type agentJSON struct {
 }
 
 func (s *Session) MarshalJSON() ([]byte, error) {
-	return json.Marshal(&sessionJSON{
-		Container: s.Container.ID(),
-		Port:      s.Port,
-	})
+	return json.Marshal(makeSessionJSON(s))
 }
 
 func (s *Sessions) MarshalJSON() ([]byte, error) {
@@ -32,10 +35,7 @@ func (r *Registry) MarshalJSON() ([]byte, error) {
 	sessions := make(map[string]*sessionJSON)
 
 	for id, session := range r.sessions {
-		sessions[id] = &sessionJSON{
-			Port:      session.Port,
-			Container: session.Container.ID(),
-		}
+		sessions[id] = makeSessionJSON(session)
 	}
 
 	return json.Marshal(sessions)
@@ -46,4 +46,15 @@ func (a *Agent) MarshalJSON() ([]byte, error) {
 		ID:       a.ID.String(),
 		Sessions: a.Registry,
 	})
+}
+
+func makeSessionJSON(s *Session) *sessionJSON {
+	return &sessionJSON{
+		Container: s.Container.ID(),
+		Port:      s.Port,
+		Limits: sessionLimitsJSON{
+			MemoryLimitInMegabytes: s.Limits.MemoryLimitInBytes / 1024 / 1024,
+			DiskLimitInMegabytes:   s.Limits.DiskLimitInBytes / 1024 / 1024,
+		},
+	}
 }

@@ -41,11 +41,18 @@ func (s *RSuite) TestRegistryMarshalling(c *C) {
 	session1 := &Session{
 		Container: &FakeContainer{Handle: "to-s-32"},
 		Port:      MappedPort(1111),
+		Limits: SessionLimits{
+			MemoryLimitInBytes: 10 * 1024 * 1024,
+			DiskLimitInBytes:   20 * 1024 * 1024,
+		},
 	}
 
 	session2 := &Session{
 		Container: &FakeContainer{Handle: "to-s-64"},
 		Port:      MappedPort(2222),
+		Limits: SessionLimits{
+			MemoryLimitInBytes: 30 * 1024 * 1024,
+		},
 	}
 
 	registry.Register("abc", session1)
@@ -57,6 +64,6 @@ func (s *RSuite) TestRegistryMarshalling(c *C) {
 	c.Assert(
 		string(json),
 		Equals,
-		`{"abc":{"container":"to-s-32","port":1111},"def":{"container":"to-s-64","port":2222}}`,
+		`{"abc":{"container":"to-s-32","port":1111,"limits":{"memory":10,"disk":20}},"def":{"container":"to-s-64","port":2222,"limits":{"memory":30,"disk":0}}}`,
 	)
 }

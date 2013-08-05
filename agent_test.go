@@ -212,11 +212,19 @@ func (s *ASuite) TestAgentMarshalling(c *C) {
 	session1 := &Session{
 		Container: &FakeContainer{Handle: "to-s-32"},
 		Port:      MappedPort(1111),
+		Limits: SessionLimits{
+			MemoryLimitInBytes: 1 * 1024 * 1024,
+			DiskLimitInBytes:   1 * 1024 * 1024,
+		},
 	}
 
 	session2 := &Session{
 		Container: &FakeContainer{Handle: "to-s-64"},
 		Port:      MappedPort(2222),
+		Limits: SessionLimits{
+			MemoryLimitInBytes: 3 * 1024 * 1024,
+			DiskLimitInBytes:   2 * 1024 * 1024,
+		},
 	}
 
 	agent.Registry.Register("abc", session1)
@@ -228,7 +236,7 @@ func (s *ASuite) TestAgentMarshalling(c *C) {
 	c.Assert(
 		string(json),
 		Equals,
-		fmt.Sprintf(`{"id":"%s","sessions":{"abc":{"container":"to-s-32","port":1111},"def":{"container":"to-s-64","port":2222}}}`, agent.ID.String()),
+		fmt.Sprintf(`{"id":"%s","sessions":{"abc":{"container":"to-s-32","port":1111,"limits":{"memory":1,"disk":1}},"def":{"container":"to-s-64","port":2222,"limits":{"memory":3,"disk":2}}}}`, agent.ID.String()),
 	)
 }
 
@@ -252,6 +260,7 @@ func (s *ASuite) TestAgentStateSaving(c *C) {
 		"abc",
 		SessionLimits{
 			MemoryLimitInBytes: uint64(32 * 1024 * 1024),
+			DiskLimitInBytes:   uint64(64 * 1024 * 1024),
 		},
 	)
 	c.Assert(err, IsNil)
@@ -263,7 +272,7 @@ func (s *ASuite) TestAgentStateSaving(c *C) {
 		string(state),
 		Equals,
 		fmt.Sprintf(
-			`{"id":"%s","sessions":{"abc":{"container":"%s","port":%d}}}`,
+			`{"id":"%s","sessions":{"abc":{"container":"%s","port":%d,"limits":{"memory":32,"disk":64}}}}`,
 			agent.ID.String(),
 			session.Container.ID(),
 			session.Port,

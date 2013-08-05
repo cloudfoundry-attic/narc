@@ -7,6 +7,7 @@ import (
 type Session struct {
 	Container Container
 	Port      MappedPort
+	Limits    SessionLimits
 }
 
 type SessionLimits struct {

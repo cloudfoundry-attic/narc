@@ -80,6 +80,10 @@ func (s *SSuite) TestSessionMarshalling(c *C) {
 	session := &Session{
 		Container: container,
 		Port:      MappedPort(123),
+		Limits: SessionLimits{
+			MemoryLimitInBytes: 3 * 1024 * 1024,
+			DiskLimitInBytes:   5 * 1024 * 1024,
+		},
 	}
 
 	json, err := session.MarshalJSON()
@@ -88,6 +92,6 @@ func (s *SSuite) TestSessionMarshalling(c *C) {
 	c.Assert(
 		string(json),
 		Equals,
-		`{"container":"to-s-32","port":123}`,
+		`{"container":"to-s-32","port":123,"limits":{"memory":3,"disk":5}}`,
 	)
 }

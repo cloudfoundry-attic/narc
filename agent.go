@@ -174,6 +174,7 @@ func (a *Agent) createSession(limits SessionLimits) (*Session, error) {
 	return &Session{
 		Container: container,
 		Port:      port,
+		Limits:    limits,
 	}, nil
 }
 
