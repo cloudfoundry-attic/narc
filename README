@@ -32,6 +32,16 @@ Dynamic containerized SSH server provisioning.
       `session id` is a unique identifier for the session.
       `public key` is the key to authorize access to the SSH server.
 
+    Optional toplevel attributes:
+
+      {...,"limits":{"memory":(memory limit),"disk":(disk limit)}}
+
+      `memory limit` is the memory limit for the container, in megabytes.
+      `disk limit` is the disk quota for the container, in megabytes.
+
+      If either are omitted, there is no limit. For example, if memory is
+      limited but not disk, there will be no disk limit, and vice versa.
+
   --------------------------------------------------
 
   PUB ssh.stop
