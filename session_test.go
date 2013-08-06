@@ -51,8 +51,10 @@ func (s *SSuite) TestStartSSHServerSuccess(c *C) {
 	err := session.StartSSHServer()
 	c.Assert(err, IsNil)
 
-	c.Assert(container.LastCommand, Equals,
-		"dropbearkey -t rsa -f .koala; dropbear -F -E -r .koala -p :123",
+	c.Assert(container.LastCommand, Matches, ".*ssh-keygen -t rsa -f .ssh/host_key.*")
+
+	c.Assert(container.LastCommand, Matches,
+		".*/usr/sbin/sshd -h \\$PWD/.ssh/host_key.*-p 123.*",
 	)
 }
 

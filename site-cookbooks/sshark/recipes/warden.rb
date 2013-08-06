@@ -59,30 +59,6 @@ execute "Install RootFS" do
   not_if "test -d /opt/warden/rootfs/usr"
 end
 
-execute "Install Dropbear" do
-  cwd "/opt/warden/rootfs"
-
-  command <<-CMD
-    set -e
-
-    curl https://matt.ucc.asn.au/dropbear/releases/dropbear-2013.58.tar.bz2 | tar jxf -
-    mv dropbear-* dropbear_build
-
-    echo "cd dropbear_build && ./configure && make" > install-dropbear
-    chmod +x install-dropbear
-    chroot /opt/warden/rootfs /install-dropbear
-
-    cp dropbear_build/dropbear usr/bin
-    cp dropbear_build/dropbearkey usr/bin
-
-    rm -rf dropbear_build
-  CMD
-
-  action :run
-
-  not_if "test -f /opt/warden/rootfs/usr/bin/dropbear"
-end
-
 cookbook_file "/opt/warden/config/warden.yml" do
   owner "vagrant"
 end

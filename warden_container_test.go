@@ -241,7 +241,7 @@ func (w *WCSuite) TestRun(c *C) {
 	wardenContainer, err := NewWardenContainer(client)
 	c.Assert(err, IsNil)
 
-	jobInfo, err := wardenContainer.Run("dropbear")
+	jobInfo, err := wardenContainer.Run("ls")
 	c.Assert(err, IsNil)
 
 	c.Assert(jobInfo.ExitStatus, Equals, uint32(42))
@@ -253,7 +253,7 @@ func (w *WCSuite) TestRun(c *C) {
 			messages(
 				&warden.RunRequest{
 					Handle: proto.String("foo-handle"),
-					Script: proto.String("dropbear"),
+					Script: proto.String("ls"),
 				},
 			).Bytes(),
 		),

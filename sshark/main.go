@@ -50,8 +50,6 @@ func main() {
 		return
 	}
 
-	log.Printf("agent ID: %s\n", agent.ID)
-
 	err = agent.HandleStarts(mbus)
 	if err != nil {
 		log.Fatal(err.Error())
