@@ -90,6 +90,8 @@ func (s *ASuite) TestAgentSessionDiskLimitsEnforcesQuota(c *C) {
 		},
 	)
 
+	defer agent.StopSession("some-guid")
+
 	c.Assert(err, IsNil)
 
 	allocate64, err := session.Container.Run(`ruby -e "print('a' * 1024 * 64)" > foo.txt`)

@@ -8,42 +8,32 @@ import (
 	"time"
 )
 
-type AdvertiserSuite struct{}
+type AdvertiserSuite struct {
+	Agent *Agent
+}
 
 func init() {
 	Suite(&AdvertiserSuite{})
 }
 
-func (a *AdvertiserSuite) TestAdvertiserAdvertisesID(c *C) {
-	mbus := mock_cfmessagebus.NewMockMessageBus()
-
+func (s *AdvertiserSuite) SetUpTest(c *C) {
 	config := AgentConfig{
 		WardenSocketPath:  "/tmp/warden.sock",
 		AdvertiseInterval: 100 * time.Millisecond,
+		Capacity: CapacityConfig{
+			MemoryInBytes: 1024 * gigabyte,
+			DiskInBytes:   1024 * gigabyte,
+		},
 	}
-
-	advertisements := make(chan []byte)
-
-	mbus.Subscribe("ssh.advertise", func(msg []byte) {
-		advertisements <- msg
-	})
 
 	agent, err := NewAgent(config)
 	c.Assert(err, IsNil)
 
-	go agent.AdvertisePeriodically(mbus)
-
-	ad := waitReceive(advertisements, 5*time.Second)
-	c.Assert(string(ad), Matches, fmt.Sprintf(`.*"id":"%s".*`, agent.ID))
+	s.Agent = agent
 }
 
-func (a *ASuite) TestAdvertiserAdvertisesPeriodically(c *C) {
+func (s *AdvertiserSuite) TestAdvertiserAdvertisesID(c *C) {
 	mbus := mock_cfmessagebus.NewMockMessageBus()
-
-	config := AgentConfig{
-		WardenSocketPath:  "/tmp/warden.sock",
-		AdvertiseInterval: 100 * time.Millisecond,
-	}
 
 	advertisements := make(chan []byte)
 
@@ -51,10 +41,22 @@ func (a *ASuite) TestAdvertiserAdvertisesPeriodically(c *C) {
 		advertisements <- msg
 	})
 
-	agent, err := NewAgent(config)
-	c.Assert(err, IsNil)
+	go s.Agent.AdvertisePeriodically(mbus)
 
-	go agent.AdvertisePeriodically(mbus)
+	ad := waitReceive(advertisements, 5*time.Second)
+	c.Assert(string(ad), Matches, fmt.Sprintf(`.*"id":"%s".*`, s.Agent.ID))
+}
+
+func (s *AdvertiserSuite) TestAdvertiserAdvertisesPeriodically(c *C) {
+	mbus := mock_cfmessagebus.NewMockMessageBus()
+
+	advertisements := make(chan []byte)
+
+	mbus.Subscribe("ssh.advertise", func(msg []byte) {
+		advertisements <- msg
+	})
+
+	go s.Agent.AdvertisePeriodically(mbus)
 
 	msg1 := waitReceive(advertisements, 1*time.Second)
 	c.Assert(msg1, NotNil)
@@ -69,17 +71,8 @@ func (a *ASuite) TestAdvertiserAdvertisesPeriodically(c *C) {
 	c.Assert(time2.Sub(time1) >= 100*time.Millisecond, Equals, true)
 }
 
-func (a *ASuite) TestAdvertiserAdvertisesAvailableMemory(c *C) {
+func (s *AdvertiserSuite) TestAdvertiserAdvertisesAvailableMemory(c *C) {
 	mbus := mock_cfmessagebus.NewMockMessageBus()
-
-	config := AgentConfig{
-		WardenSocketPath:  "/tmp/warden.sock",
-		AdvertiseInterval: 100 * time.Millisecond,
-		Capacity: CapacityConfig{
-			MemoryInBytes: 1024 * gigabyte,
-			DiskInBytes:   1024 * gigabyte,
-		},
-	}
 
 	advertisements := make(chan []byte)
 
@@ -87,16 +80,13 @@ func (a *ASuite) TestAdvertiserAdvertisesAvailableMemory(c *C) {
 		advertisements <- msg
 	})
 
-	agent, err := NewAgent(config)
-	c.Assert(err, IsNil)
-
 	client := warden.NewClient(
 		&warden.ConnectionInfo{
-			SocketPath: a.Config.WardenSocketPath,
+			SocketPath: s.Agent.Config.WardenSocketPath,
 		},
 	)
 
-	err = client.Connect()
+	err := client.Connect()
 	c.Assert(err, IsNil)
 
 	handles, err := client.List()
@@ -114,12 +104,14 @@ func (a *ASuite) TestAdvertiserAdvertisesAvailableMemory(c *C) {
 
 	reservedMemoryInMegabytes := reservedMemory / 1024 / 1024
 
-	agent.StartSession(
+	s.Agent.StartSession(
 		"some-session-guid",
 		SessionLimits{MemoryLimitInBytes: uint64(1 * megabyte)},
 	)
 
-	go agent.AdvertisePeriodically(mbus)
+	defer s.Agent.StopSession("some-session-guid")
+
+	go s.Agent.AdvertisePeriodically(mbus)
 
 	ad := waitReceive(advertisements, 1*time.Second)
 	c.Assert(
@@ -129,17 +121,8 @@ func (a *ASuite) TestAdvertiserAdvertisesAvailableMemory(c *C) {
 	)
 }
 
-func (a *ASuite) TestAdvertiserAdvertisesAvailableDisk(c *C) {
+func (s *AdvertiserSuite) TestAdvertiserAdvertisesAvailableDisk(c *C) {
 	mbus := mock_cfmessagebus.NewMockMessageBus()
-
-	config := AgentConfig{
-		WardenSocketPath:  "/tmp/warden.sock",
-		AdvertiseInterval: 100 * time.Millisecond,
-		Capacity: CapacityConfig{
-			MemoryInBytes: 1024 * gigabyte,
-			DiskInBytes:   1024 * gigabyte,
-		},
-	}
 
 	advertisements := make(chan []byte)
 
@@ -147,16 +130,13 @@ func (a *ASuite) TestAdvertiserAdvertisesAvailableDisk(c *C) {
 		advertisements <- msg
 	})
 
-	agent, err := NewAgent(config)
-	c.Assert(err, IsNil)
-
 	client := warden.NewClient(
 		&warden.ConnectionInfo{
-			SocketPath: a.Config.WardenSocketPath,
+			SocketPath: s.Agent.Config.WardenSocketPath,
 		},
 	)
 
-	err = client.Connect()
+	err := client.Connect()
 	c.Assert(err, IsNil)
 
 	handles, err := client.List()
@@ -165,7 +145,6 @@ func (a *ASuite) TestAdvertiserAdvertisesAvailableDisk(c *C) {
 	var reservedDisk uint64
 	for _, handle := range handles.GetHandles() {
 		diskLimit, err := client.GetDiskLimit(handle)
-
 		if err != nil {
 			c.Assert(err, IsNil)
 		}
@@ -175,12 +154,14 @@ func (a *ASuite) TestAdvertiserAdvertisesAvailableDisk(c *C) {
 
 	reservedDiskInMegabytes := reservedDisk / 1024 / 1024
 
-	agent.StartSession(
+	s.Agent.StartSession(
 		"some-session-guid",
 		SessionLimits{DiskLimitInBytes: uint64(1 * megabyte)},
 	)
 
-	go agent.AdvertisePeriodically(mbus)
+	defer s.Agent.StopSession("some-session-guid")
+
+	go s.Agent.AdvertisePeriodically(mbus)
 
 	ad := waitReceive(advertisements, 1*time.Second)
 	c.Assert(
