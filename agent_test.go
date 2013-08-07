@@ -159,7 +159,7 @@ func (s *ASuite) TestAgentHandlesStartsAndStops(c *C) {
 
 	directedStart := fmt.Sprintf("ssh.%s.start", agent.ID.String())
 	mbus.Publish(directedStart, []byte(`
-	    {"session":"abc","public_key":"hello im a pubkey","limits":{"memory":128}}
+	    {"session":"abc","public_key":"hello im a pubkey","memory_limit":128,"disk_limit":1}
 	`))
 
 	// give agent time to set everything up
@@ -182,6 +182,10 @@ func (s *ASuite) TestAgentHandlesStartsAndStops(c *C) {
 	info, err := sess.Container.Info()
 	c.Assert(err, IsNil)
 	c.Assert(info.MemoryLimitInBytes, Equals, uint64(128*1024*1024))
+
+	canWriteTooBig, err := sess.Container.Run(`ruby -e 'print("a" * 1024 * 1024 * 2)' > foo`)
+	c.Assert(err, IsNil)
+	c.Assert(canWriteTooBig.ExitStatus, Equals, uint32(1))
 
 	mbus.Publish("ssh.stop", []byte(`{"session":"abc"}`))
 

@@ -171,9 +171,10 @@ type sessionLimitsMessage struct {
 }
 
 type startMessage struct {
-	Session   string               `json:"session"`
-	PublicKey string               `json:"public_key"`
-	Limits    sessionLimitsMessage `json:"limits"`
+	Session                string `json:"session"`
+	PublicKey              string `json:"public_key"`
+	MemoryLimitInMegabytes uint64 `json:"memory_limit"`
+	DiskLimitInMegabytes   uint64 `json:"disk_limit"`
 }
 
 type stopMessage struct {
@@ -187,8 +188,8 @@ func (a *Agent) handleStart(start startMessage) {
 	)
 
 	limits := SessionLimits{
-		MemoryLimitInBytes: start.Limits.MemoryInMegabytes * 1024 * 1024,
-		DiskLimitInBytes:   start.Limits.DiskInMegabytes * 1024 * 1024,
+		MemoryLimitInBytes: start.MemoryLimitInMegabytes * 1024 * 1024,
+		DiskLimitInBytes:   start.DiskLimitInMegabytes * 1024 * 1024,
 	}
 
 	sess, err := a.StartSession(start.Session, limits)

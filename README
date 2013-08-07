@@ -34,7 +34,8 @@ Dynamic containerized SSH server provisioning.
 
     Optional toplevel attributes:
 
-      {...,"limits":{"memory":(memory limit),"disk":(disk limit)}}
+      {"memory_limit":(memory limit)}
+      {"disk_limit":(memory limit)}
 
       `memory limit` is the memory limit for the container, in megabytes.
       `disk limit` is the disk quota for the container, in megabytes.
