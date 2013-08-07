@@ -6,3 +6,5 @@ message_bus:
 
 warden_socket: /tmp/warden.sock
 state_file: /tmp/sshark.json
+
+advertise_interval: 10

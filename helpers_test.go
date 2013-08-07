@@ -188,3 +188,12 @@ func (f *fakeConn) RemoteAddr() net.Addr {
 	addr, _ := net.ResolveTCPAddr("tcp", "0.0.0.0:65525")
 	return addr
 }
+
+func waitReceive(from chan []byte, giveup time.Duration) []byte {
+	select {
+	case val := <-from:
+		return val
+	case <-time.After(giveup):
+		return nil
+	}
+}

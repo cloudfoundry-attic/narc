@@ -3,12 +3,14 @@ package sshark
 import (
 	"github.com/kylelemons/go-gypsy/yaml"
 	"strconv"
+	"time"
 )
 
 type Config struct {
-	MessageBus       MessageBusConfig
-	WardenSocketPath string
-	StateFilePath    string
+	MessageBus        MessageBusConfig
+	AdvertiseInterval time.Duration
+	WardenSocketPath  string
+	StateFilePath     string
 }
 
 type MessageBusConfig struct {
@@ -26,6 +28,8 @@ var DefaultConfig = Config{
 
 	WardenSocketPath: "/tmp/warden.sock",
 	StateFilePath:    "/tmp/sshark.json",
+
+	AdvertiseInterval: 10 * time.Second,
 }
 
 func LoadConfig(configFilePath string) Config {
@@ -43,6 +47,11 @@ func LoadConfig(configFilePath string) Config {
 	wardenSocketPath := file.Require("warden_socket")
 	stateFilePath, _ := file.Get("state_file")
 
+	advertiseInterval, err := strconv.Atoi(file.Require("advertise_interval"))
+	if err != nil {
+		panic("non-numeric advertise interval")
+	}
+
 	return Config{
 		MessageBus: MessageBusConfig{
 			Host:     mbusHost,
@@ -50,6 +59,8 @@ func LoadConfig(configFilePath string) Config {
 			Username: mbusUsername,
 			Password: mbusPassword,
 		},
+
+		AdvertiseInterval: time.Duration(advertiseInterval) * time.Second,
 
 		WardenSocketPath: wardenSocketPath,
 		StateFilePath:    stateFilePath,

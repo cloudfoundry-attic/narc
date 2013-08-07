@@ -9,17 +9,23 @@ import (
 	"github.com/vito/gordon"
 	"io/ioutil"
 	"log"
+	"time"
 )
 
 type AgentConfig struct {
-	WardenSocketPath string
-	StateFilePath    string
+	WardenSocketPath  string
+	StateFilePath     string
+	AdvertiseInterval time.Duration
 }
 
 type Agent struct {
 	ID       *uuid.UUID
 	Registry *Registry
 	Config   AgentConfig
+}
+
+type AdvertiseMessage struct {
+	ID string `json:"id"`
 }
 
 var SessionNotRegistered = errors.New("session not registered")
@@ -101,6 +107,24 @@ func (a *Agent) HandleStops(mbus cfmessagebus.MessageBus) error {
 
 		go a.handleStop(stop)
 	})
+}
+
+func (a *Agent) AdvertisePeriodically(mbus cfmessagebus.MessageBus) {
+	for {
+		select {
+		case <-time.After(a.Config.AdvertiseInterval):
+			a.sendAdvertisement(mbus)
+		}
+	}
+}
+
+func (a *Agent) sendAdvertisement(mbus cfmessagebus.MessageBus) {
+	msg, err := json.Marshal(&AdvertiseMessage{ID: a.ID.String()})
+	if err != nil {
+		return
+	}
+
+	mbus.Publish("ssh.advertise", msg)
 }
 
 func (a *Agent) createSession(limits SessionLimits) (*Session, error) {

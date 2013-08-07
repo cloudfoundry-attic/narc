@@ -40,8 +40,9 @@ func main() {
 	}
 
 	agentConfig := sshark.AgentConfig{
-		WardenSocketPath: config.WardenSocketPath,
-		StateFilePath:    config.StateFilePath,
+		WardenSocketPath:  config.WardenSocketPath,
+		StateFilePath:     config.StateFilePath,
+		AdvertiseInterval: config.AdvertiseInterval,
 	}
 
 	agent, err := sshark.NewAgent(agentConfig)
@@ -61,6 +62,8 @@ func main() {
 		log.Fatal(err.Error())
 		return
 	}
+
+	go agent.AdvertisePeriodically(mbus)
 
 	select {}
 }
