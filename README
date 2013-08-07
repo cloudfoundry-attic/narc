@@ -5,7 +5,7 @@
                   \/\/\  ||                       <
                   /\/\/  || |                 _/\  \
                   `-_________\   |____-------'   \__\
-                              \  |                
+                              \  |
                             _  \_|           _
                     ___ ___| |__   __ _ _ __| | __
                    / __/ __| '_ \ / _` | '__| |/ /
@@ -22,7 +22,7 @@ Dynamic containerized SSH server provisioning.
 = Usage
 
   PUB ssh.(sshark server id).start
-      
+
     Provisions a SSH session on the given sshark server.
 
     `sshark server id` is the unique identifier for the target server.
@@ -52,3 +52,13 @@ Dynamic containerized SSH server provisioning.
     Payload: {"session":"(session id)"}
 
       `session id` is a unique identifier for the session.
+
+  --------------------------------------------------
+
+  SUB ssh.advertise
+
+    Sent periodically to allow other components to discover the sshark server.
+
+    Payload: {"id":"(agent id)"}
+
+      `agent id` is the unique identifier for the sshark server.
