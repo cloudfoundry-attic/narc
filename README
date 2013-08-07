@@ -60,6 +60,12 @@ Dynamic containerized SSH server provisioning.
 
     Sent periodically to allow other components to discover the sshark server.
 
-    Payload: {"id":"(agent id)"}
+    Payload: {
+      "id": "(agent id)",
+      "available_memory": (avail. memory),
+      "available_disk": (avail. disk)
+    }
 
       `agent id` is the unique identifier for the sshark server.
+      `available memory` is the remaining reservable memory for the server.
+      `available disk` is the remaining reservable disk space for the server.

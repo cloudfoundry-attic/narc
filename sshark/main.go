@@ -43,6 +43,7 @@ func main() {
 		WardenSocketPath:  config.WardenSocketPath,
 		StateFilePath:     config.StateFilePath,
 		AdvertiseInterval: config.AdvertiseInterval,
+		Capacity:          config.Capacity,
 	}
 
 	agent, err := sshark.NewAgent(agentConfig)

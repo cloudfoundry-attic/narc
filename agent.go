@@ -15,6 +15,7 @@ import (
 type AgentConfig struct {
 	WardenSocketPath  string
 	StateFilePath     string
+	Capacity          CapacityConfig
 	AdvertiseInterval time.Duration
 }
 
@@ -25,7 +26,9 @@ type Agent struct {
 }
 
 type AdvertiseMessage struct {
-	ID string `json:"id"`
+	ID                         string `json:"id"`
+	AvailableMemoryInMegabytes uint64 `json:"available_memory"`
+	AvailableDiskInMegabytes   uint64 `json:"available_disk"`
 }
 
 var SessionNotRegistered = errors.New("session not registered")
@@ -119,8 +122,17 @@ func (a *Agent) AdvertisePeriodically(mbus cfmessagebus.MessageBus) {
 }
 
 func (a *Agent) sendAdvertisement(mbus cfmessagebus.MessageBus) {
-	msg, err := json.Marshal(&AdvertiseMessage{ID: a.ID.String()})
+	reservedMemory, reservedDisk := a.getWardenReservedResources()
+
+	advertiseMessage := &AdvertiseMessage{
+		ID: a.ID.String(),
+		AvailableMemoryInMegabytes: (a.Config.Capacity.MemoryInBytes - reservedMemory) / 1024 / 1024,
+		AvailableDiskInMegabytes:   (a.Config.Capacity.DiskInBytes - reservedDisk) / 1024 / 1024,
+	}
+
+	msg, err := json.Marshal(advertiseMessage)
 	if err != nil {
+		log.Printf("Failed to marshal advertise message: %s\n", err)
 		return
 	}
 
@@ -246,4 +258,44 @@ func (a *Agent) writeState() error {
 	}
 
 	return ioutil.WriteFile(a.Config.StateFilePath, json, 0644)
+}
+
+func (a *Agent) getWardenReservedResources() (reservedMemory, reservedDisk uint64) {
+	client := warden.NewClient(
+		&warden.ConnectionInfo{
+			SocketPath: a.Config.WardenSocketPath,
+		},
+	)
+
+	err := client.Connect()
+	if err != nil {
+		log.Printf("Failed to connect to Warden: %s\n", err)
+		return
+	}
+
+	handles, err := client.List()
+
+	if err != nil {
+		log.Printf("Failed to list handles: %s\n", err)
+		return
+	}
+
+	for _, handle := range handles.GetHandles() {
+		memoryLimit, err := client.GetMemoryLimit(handle)
+		if err != nil {
+			log.Printf("Failed to get memory limit for %s: %s\n", handle, err)
+			continue
+		}
+
+		diskLimit, err := client.GetDiskLimit(handle)
+		if err != nil {
+			log.Printf("Failed to get disk limit for %s: %s\n", handle, err)
+			continue
+		}
+
+		reservedMemory += memoryLimit
+		reservedDisk += diskLimit
+	}
+
+	return
 }

@@ -8,3 +8,7 @@ warden_socket: /tmp/warden.sock
 state_file: /tmp/sshark.json
 
 advertise_interval: 10
+
+capacity:
+  memory: 2047
+  disk: 16384
