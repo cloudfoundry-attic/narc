@@ -3,11 +3,9 @@ package narc
 import (
 	"code.google.com/p/go.net/websocket"
 	"fmt"
-	"github.com/kr/pty"
 	"io"
 	"net"
 	"net/http"
-	"os/exec"
 )
 
 type ProxyServer struct {
@@ -66,35 +64,21 @@ func (p *ProxyServer) handler(ws *websocket.Conn) {
 		return
 	}
 
-	wshdSocket := fmt.Sprintf("/opt/warden/containers/%s/run/wshd.sock", task.Container.ID())
-
-	if task.pty == nil {
-		c := exec.Command(
-			"sudo",
-			"/opt/warden/warden/root/linux/skeleton/bin/wsh",
-			"--socket", wshdSocket,
-			"--user", "vcap",
-		)
-
-		pty, err := pty.Start(c)
-		if err != nil {
-			// TODO: don't panic
-			panic(err)
-		}
-
-		task.pty = pty
+	pty, err := task.Run()
+	if err != nil {
+		panic(err)
 	}
 
 	commandDone := make(chan bool)
 	connectionClosed := make(chan bool)
 
 	go func() {
-		io.Copy(ws, task.pty)
+		io.Copy(ws, pty)
 		commandDone <- true
 	}()
 
 	go func() {
-		io.Copy(task.pty, ws)
+		io.Copy(pty, ws)
 		connectionClosed <- true
 	}()
 
