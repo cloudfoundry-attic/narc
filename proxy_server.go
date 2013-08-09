@@ -59,35 +59,39 @@ func (p *ProxyServer) handler(ws *websocket.Conn) {
 
 	wshdSocket := fmt.Sprintf("/opt/warden/containers/%s/run/wshd.sock", task.Container.ID())
 
-	c := exec.Command(
-		"sudo",
-		"/opt/warden/warden/root/linux/skeleton/bin/wsh",
-		"--socket", wshdSocket,
-		"--user", "vcap",
-	)
+	if task.pty == nil {
+		c := exec.Command(
+			"sudo",
+			"/opt/warden/warden/root/linux/skeleton/bin/wsh",
+			"--socket", wshdSocket,
+			"--user", "vcap",
+		)
 
-	pty, err := pty.Start(c)
-	if err != nil {
-		// TODO: don't panic
-		panic(err)
+		pty, err := pty.Start(c)
+		if err != nil {
+			// TODO: don't panic
+			panic(err)
+		}
+
+		task.pty = pty
 	}
 
 	commandDone := make(chan bool)
 	connectionClosed := make(chan bool)
 
 	go func() {
-		io.Copy(ws, pty)
+		io.Copy(ws, task.pty)
 		commandDone <- true
 	}()
 
 	go func() {
-		io.Copy(pty, ws)
+		io.Copy(task.pty, ws)
 		connectionClosed <- true
 	}()
 
 	select {
 	case <-commandDone:
-		err = p.agent.StopTask(taskID)
+		err := p.agent.StopTask(taskID)
 		if err != nil {
 			panic(err)
 		}

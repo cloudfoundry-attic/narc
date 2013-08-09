@@ -61,7 +61,7 @@ func main() {
 		return
 	}
 
-	server := narc.NewProxyServer(agent.Registry)
+	server := narc.NewProxyServer(agent)
 	err = server.Start(8081)
 	if err != nil {
 		panic(err)

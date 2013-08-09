@@ -3,6 +3,7 @@ package narc
 import (
 	"bufio"
 	"code.google.com/p/go.net/websocket"
+	"errors"
 	"fmt"
 	. "launchpad.net/gocheck"
 	"time"
@@ -53,27 +54,25 @@ func (s *PSSuite) TearDownTest(c *C) {
 func (s *PSSuite) TestProxyServerForwardsOutput(c *C) {
 	_, reader := s.connectedWebSocket(c)
 
-	prompt, err := reader.ReadBytes('$')
+	prompt, err := readWithTimeout(reader, '$', 1*time.Second)
 	c.Assert(err, IsNil)
-
 	c.Assert(string(prompt), Equals, fmt.Sprintf("vcap@%s:~$", s.task.Container.ID()))
 }
 
 func (s *PSSuite) TestProxyServerForwardsInput(c *C) {
 	writer, reader := s.connectedWebSocket(c)
 
-	prompt, err := reader.ReadBytes('$')
+	prompt, err := readWithTimeout(reader, '$', 1*time.Second)
 	c.Assert(err, IsNil)
-
 	c.Assert(string(prompt), Equals, fmt.Sprintf("vcap@%s:~$", s.task.Container.ID()))
 
 	writer.Write([]byte("echo hi\n"))
 
-	hiInput, err := reader.ReadBytes('\n')
+	hiInput, err := readWithTimeout(reader, '\n', 2*time.Second)
 	c.Assert(err, IsNil)
 	c.Assert(string(hiInput), Equals, " echo hi\r\n")
 
-	hi, err := reader.ReadBytes('\n')
+	hi, err := readWithTimeout(reader, '\n', 2*time.Second)
 	c.Assert(err, IsNil)
 	c.Assert(string(hi), Equals, "hi\r\n")
 }
@@ -81,14 +80,13 @@ func (s *PSSuite) TestProxyServerForwardsInput(c *C) {
 func (s *PSSuite) TestProxyServerDestroysContainerWhenProcessEnds(c *C) {
 	writer, reader := s.connectedWebSocket(c)
 
-	prompt, err := reader.ReadBytes('$')
+	prompt, err := readWithTimeout(reader, '$', 1*time.Second)
 	c.Assert(err, IsNil)
-
 	c.Assert(string(prompt), Equals, fmt.Sprintf("vcap@%s:~$", s.task.Container.ID()))
 
 	writer.Write([]byte("exit\n"))
 
-	hiInput, err := reader.ReadBytes('\n')
+	hiInput, err := readWithTimeout(reader, '\n', 2*time.Second)
 	c.Assert(err, IsNil)
 	c.Assert(string(hiInput), Equals, " exit\r\n")
 
@@ -101,9 +99,8 @@ func (s *PSSuite) TestProxyServerDestroysContainerWhenProcessEnds(c *C) {
 func (s *PSSuite) TestProxyServerKeepsContainerOnDisconnect(c *C) {
 	writer, reader := s.connectedWebSocket(c)
 
-	prompt, err := reader.ReadBytes('$')
+	prompt, err := readWithTimeout(reader, '$', 1*time.Second)
 	c.Assert(err, IsNil)
-
 	c.Assert(string(prompt), Equals, fmt.Sprintf("vcap@%s:~$", s.task.Container.ID()))
 
 	writer.Close()
@@ -117,7 +114,31 @@ func (s *PSSuite) TestProxyServerKeepsContainerOnDisconnect(c *C) {
 }
 
 func (s *PSSuite) TestProxyServerAttachesToRunningProcess(c *C) {
+	writer, reader := s.connectedWebSocket(c)
 
+	prompt, err := readWithTimeout(reader, '$', 1*time.Second)
+	c.Assert(err, IsNil)
+	c.Assert(string(prompt), Equals, fmt.Sprintf("vcap@%s:~$", s.task.Container.ID()))
+
+	writer.Write([]byte("ruby -e 'a = 0; while true; sleep 1; a += 1; p a; end'\n"))
+
+	loopInput, err := readWithTimeout(reader, '\n', 2*time.Second)
+	c.Assert(err, IsNil)
+	c.Assert(string(loopInput), Matches, " ruby -e.*\r\n")
+
+	nextNumber, err := readWithTimeout(reader, '\n', 5*time.Second)
+	c.Assert(err, IsNil)
+	c.Assert(string(nextNumber), Equals, "1\r\n")
+
+	writer.Close()
+
+	time.Sleep(1 * time.Second)
+
+	writer, reader = s.connectedWebSocket(c)
+
+	nextNumber, err = readWithTimeout(reader, '\n', 5*time.Second)
+	c.Assert(err, IsNil)
+	c.Assert(string(nextNumber), Equals, "3\r\n") // TODO: just check that it's a higher number
 }
 
 func (s *PSSuite) TestProxyServerRejectsInvalidToken(c *C) {
@@ -134,4 +155,27 @@ func (s *PSSuite) connectedWebSocket(c *C) (*websocket.Conn, *bufio.Reader) {
 	c.Assert(err, IsNil)
 
 	return ws, bufio.NewReader(ws)
+}
+
+func readWithTimeout(reader *bufio.Reader, delim byte, timeout time.Duration) ([]byte, error) {
+	readResult := make(chan []byte)
+	errChannel := make(chan error)
+
+	go func() {
+		res, err := reader.ReadBytes(delim)
+		if err != nil {
+			errChannel <- err
+		}
+
+		readResult <- res
+	}()
+
+	select {
+	case err := <-errChannel:
+		return nil, err
+	case res := <-readResult:
+		return res, nil
+	case <-time.After(timeout):
+		return nil, errors.New("timeout!")
+	}
 }
