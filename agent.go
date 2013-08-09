@@ -34,8 +34,8 @@ func NewAgent(config AgentConfig) (*Agent, error) {
 	}, nil
 }
 
-func (a *Agent) StartTask(guid string, limits TaskLimits) (*Task, error) {
-	task, err := a.createTask(limits)
+func (a *Agent) StartTask(guid, secureToken string, limits TaskLimits) (*Task, error) {
+	task, err := a.createTask(secureToken, limits)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +90,7 @@ func (a *Agent) HandleStops(mbus cfmessagebus.MessageBus) error {
 	})
 }
 
-func (a *Agent) createTask(limits TaskLimits) (*Task, error) {
+func (a *Agent) createTask(secureToken string, limits TaskLimits) (*Task, error) {
 	client := warden.NewClient(
 		&warden.ConnectionInfo{
 			SocketPath: a.Config.WardenSocketPath,
@@ -118,8 +118,9 @@ func (a *Agent) createTask(limits TaskLimits) (*Task, error) {
 	}
 
 	return &Task{
-		Container: container,
-		Limits:    limits,
+		Container:   container,
+		SecureToken: secureToken,
+		Limits:      limits,
 	}, nil
 }
 
@@ -145,7 +146,7 @@ func (a *Agent) handleStart(start startMessage) {
 		DiskLimitInBytes:   start.DiskLimitInMegabytes * 1024 * 1024,
 	}
 
-	_, err := a.StartTask(start.Task, limits)
+	_, err := a.StartTask(start.Task, "", limits)
 	if err != nil {
 		log.Printf("Failed to create task: %s\n", err)
 		return

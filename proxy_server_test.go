@@ -31,7 +31,7 @@ func (s *PSSuite) SetUpTest(c *C) {
 
 	s.agent = agent
 
-	task, err := agent.StartTask("abc", TaskLimits{})
+	task, err := agent.StartTask("abc", "some-token", TaskLimits{})
 	if err != nil {
 		panic(err)
 	}
@@ -142,12 +142,48 @@ func (s *PSSuite) TestProxyServerAttachesToRunningProcess(c *C) {
 }
 
 func (s *PSSuite) TestProxyServerRejectsInvalidToken(c *C) {
+	config, err := websocket.NewConfig("ws://localhost:7331", "http://localhost")
+	config.Header.Add("X-Task-ID", "abc")
+	config.Header.Add("X-Task-Token", "some-bogus-token")
 
+	c.Assert(err, IsNil)
+
+	ws, err := websocket.DialConfig(config)
+	c.Assert(err, IsNil)
+
+	reader := bufio.NewReader(ws)
+
+	errorMessage, err := readWithTimeout(reader, '\n', 1*time.Second)
+	c.Assert(err, IsNil)
+	c.Assert(string(errorMessage), Equals, "Invalid Token\n")
+
+	_, err = reader.ReadByte()
+	c.Assert(err, NotNil)
+}
+
+func (s *PSSuite) TestProxyServerRejectsUnknownTask(c *C) {
+	config, err := websocket.NewConfig("ws://localhost:7331", "http://localhost")
+	config.Header.Add("X-Task-ID", "def")
+
+	c.Assert(err, IsNil)
+
+	ws, err := websocket.DialConfig(config)
+	c.Assert(err, IsNil)
+
+	reader := bufio.NewReader(ws)
+
+	errorMessage, err := readWithTimeout(reader, '\n', 1*time.Second)
+	c.Assert(err, IsNil)
+	c.Assert(string(errorMessage), Equals, "Unknown Task\n")
+
+	_, err = reader.ReadByte()
+	c.Assert(err, NotNil)
 }
 
 func (s *PSSuite) connectedWebSocket(c *C) (*websocket.Conn, *bufio.Reader) {
 	config, err := websocket.NewConfig("ws://localhost:7331", "http://localhost")
 	config.Header.Add("X-Task-ID", "abc")
+	config.Header.Add("X-Task-Token", "some-token")
 
 	c.Assert(err, IsNil)
 

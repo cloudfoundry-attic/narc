@@ -26,6 +26,7 @@ func (s *ASuite) TestAgentTaskLifecycle(c *C) {
 
 	task, err := agent.StartTask(
 		"some-guid",
+		"foo",
 		TaskLimits{
 			MemoryLimitInBytes: uint64(32 * 1024 * 1024),
 		},
@@ -35,6 +36,8 @@ func (s *ASuite) TestAgentTaskLifecycle(c *C) {
 
 	_, found := agent.Registry.Lookup("some-guid")
 	c.Assert(found, Equals, true)
+
+	c.Assert(task.SecureToken, Equals, "foo")
 
 	c.Assert(task.Container, NotNil)
 
@@ -58,6 +61,7 @@ func (s *ASuite) TestAgentTaskMemoryLimitsMakesTaskDie(c *C) {
 
 	task, err := agent.StartTask(
 		"some-guid",
+		"",
 		TaskLimits{
 			MemoryLimitInBytes: uint64(32 * 1024 * 1024),
 		},
@@ -80,6 +84,7 @@ func (s *ASuite) TestAgentTaskDiskLimitsEnforcesQuota(c *C) {
 
 	task, err := agent.StartTask(
 		"some-guid",
+		"",
 		TaskLimits{
 			MemoryLimitInBytes: uint64(32 * 1024 * 1024),
 			DiskLimitInBytes:   uint64(128 * 1024),
@@ -118,6 +123,7 @@ func (s *ASuite) TestAgentTeardownAlreadyDestroyedContainer(c *C) {
 
 	task, err := agent.StartTask(
 		"some-guid",
+		"",
 		TaskLimits{
 			MemoryLimitInBytes: uint64(32 * 1024 * 1024),
 		},

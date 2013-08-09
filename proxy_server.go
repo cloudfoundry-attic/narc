@@ -49,12 +49,21 @@ func (p *ProxyServer) Stop() error {
 }
 
 func (p *ProxyServer) handler(ws *websocket.Conn) {
+	defer ws.Close()
+
 	taskID := ws.Request().Header.Get("X-Task-ID")
+	secureToken := ws.Request().Header.Get("X-Task-Token")
 
 	task, found := p.agent.Registry.Lookup(taskID)
+
 	if !found {
-		// TODO: don't panic
-		panic("session not found")
+		ws.Write([]byte("Unknown Task\n"))
+		return
+	}
+
+	if task.SecureToken != secureToken {
+		ws.Write([]byte("Invalid Token\n"))
+		return
 	}
 
 	wshdSocket := fmt.Sprintf("/opt/warden/containers/%s/run/wshd.sock", task.Container.ID())
@@ -96,7 +105,6 @@ func (p *ProxyServer) handler(ws *websocket.Conn) {
 			panic(err)
 		}
 
-		ws.Close()
 		<-connectionClosed
 
 	case <-connectionClosed:
