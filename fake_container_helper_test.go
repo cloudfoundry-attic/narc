@@ -1,4 +1,4 @@
-package sshark
+package narc
 
 import (
 	"errors"

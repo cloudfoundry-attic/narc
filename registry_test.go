@@ -1,4 +1,4 @@
-package sshark
+package narc
 
 import (
 	. "launchpad.net/gocheck"
@@ -12,58 +12,25 @@ func init() {
 
 func (s *RSuite) TestRegisterCRUD(c *C) {
 	registry := NewRegistry()
-	session := &Session{}
+	task := &Task{}
 
-	session2 := &Session{}
+	task2 := &Task{}
 
-	registry.Register("123", session)
+	registry.Register("123", task)
 
 	sess, ok := registry.Lookup("123")
 	c.Assert(ok, Equals, true)
-	c.Assert(sess, Equals, session)
+	c.Assert(sess, Equals, task)
 
 	registry.Unregister("123")
 
 	sess, ok = registry.Lookup("123")
 	c.Assert(ok, Equals, false)
 
-	registry.Register("123", session)
-	registry.Register("123", session2)
+	registry.Register("123", task)
+	registry.Register("123", task2)
 
 	sess, ok = registry.Lookup("123")
-	c.Assert(sess, Equals, session2)
-	c.Assert(sess, Not(Equals), session)
-}
-
-func (s *RSuite) TestRegistryMarshalling(c *C) {
-	registry := NewRegistry()
-
-	session1 := &Session{
-		Container: &FakeContainer{Handle: "to-s-32"},
-		Port:      MappedPort(1111),
-		Limits: SessionLimits{
-			MemoryLimitInBytes: 10 * 1024 * 1024,
-			DiskLimitInBytes:   20 * 1024 * 1024,
-		},
-	}
-
-	session2 := &Session{
-		Container: &FakeContainer{Handle: "to-s-64"},
-		Port:      MappedPort(2222),
-		Limits: SessionLimits{
-			MemoryLimitInBytes: 30 * 1024 * 1024,
-		},
-	}
-
-	registry.Register("abc", session1)
-	registry.Register("def", session2)
-
-	json, err := registry.MarshalJSON()
-	c.Assert(err, IsNil)
-
-	c.Assert(
-		string(json),
-		Equals,
-		`{"abc":{"container":"to-s-32","port":1111,"limits":{"memory":10,"disk":20}},"def":{"container":"to-s-64","port":2222,"limits":{"memory":30,"disk":0}}}`,
-	)
+	c.Assert(sess, Equals, task2)
+	c.Assert(sess, Not(Equals), task)
 }

@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 	"github.com/cloudfoundry/go_cfmessagebus"
-	"github.com/cloudfoundry/sshark"
+	"github.com/vito/narc"
 	"log"
 )
 
@@ -12,12 +12,12 @@ var configFile = flag.String("config", "", "path to config file")
 func main() {
 	flag.Parse()
 
-	var config sshark.Config
+	var config narc.Config
 
 	if *configFile != "" {
-		config = sshark.LoadConfig(*configFile)
+		config = narc.LoadConfig(*configFile)
 	} else {
-		config = sshark.DefaultConfig
+		config = narc.DefaultConfig
 	}
 
 	mbus, err := cfmessagebus.NewMessageBus("NATS")
@@ -39,14 +39,11 @@ func main() {
 		return
 	}
 
-	agentConfig := sshark.AgentConfig{
-		WardenSocketPath:  config.WardenSocketPath,
-		StateFilePath:     config.StateFilePath,
-		AdvertiseInterval: config.AdvertiseInterval,
-		Capacity:          config.Capacity,
+	agentConfig := narc.AgentConfig{
+		WardenSocketPath: config.WardenSocketPath,
 	}
 
-	agent, err := sshark.NewAgent(agentConfig)
+	agent, err := narc.NewAgent(agentConfig)
 	if err != nil {
 		log.Fatal(err.Error())
 		return
@@ -64,7 +61,11 @@ func main() {
 		return
 	}
 
-	go agent.AdvertisePeriodically(mbus)
+	server := narc.NewProxyServer(agent.Registry)
+	err = server.Start(8081)
+	if err != nil {
+		panic(err)
+	}
 
 	select {}
 }

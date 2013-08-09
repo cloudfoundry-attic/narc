@@ -1,4 +1,4 @@
-package sshark
+package narc
 
 import (
 	"github.com/kylelemons/go-gypsy/yaml"
@@ -42,7 +42,7 @@ var DefaultConfig = Config{
 	},
 
 	WardenSocketPath: "/tmp/warden.sock",
-	StateFilePath:    "/tmp/sshark.json",
+	StateFilePath:    "/tmp/narc.json",
 
 	AdvertiseInterval: 10 * time.Second,
 }

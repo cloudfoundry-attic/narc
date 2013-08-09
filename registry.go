@@ -1,40 +1,40 @@
-package sshark
+package narc
 
 import (
 	"sync"
 )
 
-type Sessions map[string]*Session
+type Tasks map[string]*Task
 
 type Registry struct {
-	sessions Sessions
-	lock     sync.RWMutex
+	tasks Tasks
+	lock  sync.RWMutex
 }
 
 func NewRegistry() *Registry {
 	return &Registry{
-		sessions: make(map[string]*Session),
+		tasks: make(map[string]*Task),
 	}
 }
 
-func (r *Registry) Register(id string, session *Session) {
+func (r *Registry) Register(id string, task *Task) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
-	r.sessions[id] = session
+	r.tasks[id] = task
 }
 
 func (r *Registry) Unregister(id string) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
-	delete(r.sessions, id)
+	delete(r.tasks, id)
 }
 
-func (r *Registry) Lookup(id string) (*Session, bool) {
+func (r *Registry) Lookup(id string) (*Task, bool) {
 	r.lock.RLock()
 	defer r.lock.RUnlock()
 
-	val, ok := r.sessions[id]
+	val, ok := r.tasks[id]
 	return val, ok
 }

@@ -5,7 +5,7 @@ message_bus:
   password:
 
 warden_socket: /tmp/warden.sock
-state_file: /tmp/sshark.json
+state_file: /tmp/narc.json
 
 advertise_interval: 10
 

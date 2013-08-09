@@ -1,5 +1,3 @@
-include_recipe "build-essential"
-
 %w{curl mercurial bzr}.each do |package_name|
   package package_name
 end
