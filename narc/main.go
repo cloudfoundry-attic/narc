@@ -61,10 +61,16 @@ func main() {
 		return
 	}
 
-	server := narc.NewProxyServer(agent)
+	server, err := narc.NewProxyServer(agent)
+	if err != nil {
+		log.Fatal(err.Error())
+		return
+	}
+
 	err = server.Start(8081)
 	if err != nil {
-		panic(err)
+		log.Fatal(err.Error())
+		return
 	}
 
 	select {}

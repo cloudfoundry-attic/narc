@@ -1,10 +1,11 @@
 package narc
 
 import (
-	"bufio"
-	"code.google.com/p/go.net/websocket"
-	"errors"
+	ex "bitbucket.org/teythoon/expect"
+	"code.google.com/p/go.crypto/ssh"
 	"fmt"
+	"github.com/nu7hatch/gouuid"
+	"io"
 	. "launchpad.net/gocheck"
 	"time"
 )
@@ -14,7 +15,9 @@ type PSSuite struct {
 
 	agent    *Agent
 	registry *Registry
-	task     *Task
+
+	task   *Task
+	taskID string
 }
 
 func init() {
@@ -31,14 +34,29 @@ func (s *PSSuite) SetUpTest(c *C) {
 
 	s.agent = agent
 
-	task, err := agent.StartTask("abc", "some-token", TaskLimits{})
+	taskUUID, err := uuid.NewV4()
+	if err != nil {
+		panic(err)
+	}
+
+	taskToken, err := uuid.NewV4()
+	if err != nil {
+		panic(err)
+	}
+
+	s.taskID = taskUUID.String()
+
+	task, err := agent.StartTask(s.taskID, taskToken.String(), TaskLimits{})
 	if err != nil {
 		panic(err)
 	}
 
 	s.task = task
 
-	s.ProxyServer = NewProxyServer(agent)
+	s.ProxyServer, err = NewProxyServer(agent)
+	if err != nil {
+		panic(err)
+	}
 
 	err = s.ProxyServer.Start(7331)
 	if err != nil {
@@ -47,61 +65,45 @@ func (s *PSSuite) SetUpTest(c *C) {
 }
 
 func (s *PSSuite) TearDownTest(c *C) {
-	s.agent.StopTask("abc")
+	s.agent.StopTask(s.taskID)
 	s.ProxyServer.Stop()
 }
 
 func (s *PSSuite) TestProxyServerForwardsOutput(c *C) {
-	_, reader := s.connectedWebSocket(c)
-
-	prompt, err := readWithTimeout(reader, '$', 1*time.Second)
-	c.Assert(err, IsNil)
-	c.Assert(string(prompt), Equals, fmt.Sprintf("vcap@%s:~$", s.task.Container.ID()))
+	_, reader := s.connectedTask(c)
+	expect(c, reader, fmt.Sprintf(`vcap@%s:~\$`, s.task.Container.ID()))
 }
 
 func (s *PSSuite) TestProxyServerForwardsInput(c *C) {
-	writer, reader := s.connectedWebSocket(c)
+	writer, reader := s.connectedTask(c)
 
-	prompt, err := readWithTimeout(reader, '$', 1*time.Second)
-	c.Assert(err, IsNil)
-	c.Assert(string(prompt), Equals, fmt.Sprintf("vcap@%s:~$", s.task.Container.ID()))
+	expect(c, reader, fmt.Sprintf(`vcap@%s:~\$`, s.task.Container.ID()))
 
 	writer.Write([]byte("echo hi\n"))
 
-	hiInput, err := readWithTimeout(reader, '\n', 2*time.Second)
-	c.Assert(err, IsNil)
-	c.Assert(string(hiInput), Equals, " echo hi\r\n")
-
-	hi, err := readWithTimeout(reader, '\n', 2*time.Second)
-	c.Assert(err, IsNil)
-	c.Assert(string(hi), Equals, "hi\r\n")
+	expect(c, reader, " echo hi\r\n")
+	expect(c, reader, "hi\r\n")
 }
 
 func (s *PSSuite) TestProxyServerDestroysContainerWhenProcessEnds(c *C) {
-	writer, reader := s.connectedWebSocket(c)
+	writer, reader := s.connectedTask(c)
 
-	prompt, err := readWithTimeout(reader, '$', 1*time.Second)
-	c.Assert(err, IsNil)
-	c.Assert(string(prompt), Equals, fmt.Sprintf("vcap@%s:~$", s.task.Container.ID()))
+	expect(c, reader, fmt.Sprintf(`vcap@%s:~\$`, s.task.Container.ID()))
 
 	writer.Write([]byte("exit\n"))
 
-	hiInput, err := readWithTimeout(reader, '\n', 2*time.Second)
-	c.Assert(err, IsNil)
-	c.Assert(string(hiInput), Equals, " exit\r\n")
+	expect(c, reader, " exit\r\n")
 
 	time.Sleep(1 * time.Second)
 
-	_, err = s.task.Container.Run("")
+	_, err := s.task.Container.Run("")
 	c.Assert(err, NotNil)
 }
 
 func (s *PSSuite) TestProxyServerKeepsContainerOnDisconnect(c *C) {
-	writer, reader := s.connectedWebSocket(c)
+	writer, reader := s.connectedTask(c)
 
-	prompt, err := readWithTimeout(reader, '$', 1*time.Second)
-	c.Assert(err, IsNil)
-	c.Assert(string(prompt), Equals, fmt.Sprintf("vcap@%s:~$", s.task.Container.ID()))
+	expect(c, reader, fmt.Sprintf(`vcap@%s:~\$`, s.task.Container.ID()))
 
 	writer.Close()
 
@@ -114,104 +116,77 @@ func (s *PSSuite) TestProxyServerKeepsContainerOnDisconnect(c *C) {
 }
 
 func (s *PSSuite) TestProxyServerAttachesToRunningProcess(c *C) {
-	writer, reader := s.connectedWebSocket(c)
+	writer, reader := s.connectedTask(c)
 
-	prompt, err := readWithTimeout(reader, '$', 1*time.Second)
-	c.Assert(err, IsNil)
-	c.Assert(string(prompt), Equals, fmt.Sprintf("vcap@%s:~$", s.task.Container.ID()))
+	expect(c, reader, fmt.Sprintf(`vcap@%s:~\$`, s.task.Container.ID()))
 
 	writer.Write([]byte("ruby -e 'a = 0; while true; sleep 1; a += 1; p a; end'\n"))
 
-	loopInput, err := readWithTimeout(reader, '\n', 2*time.Second)
-	c.Assert(err, IsNil)
-	c.Assert(string(loopInput), Matches, " ruby -e.*\r\n")
-
-	nextNumber, err := readWithTimeout(reader, '\n', 5*time.Second)
-	c.Assert(err, IsNil)
-	c.Assert(string(nextNumber), Equals, "1\r\n")
+	expect(c, reader, " ruby -e")
+	expect(c, reader, "1\r\n")
 
 	writer.Close()
 
 	time.Sleep(1 * time.Second)
 
-	writer, reader = s.connectedWebSocket(c)
+	writer, reader = s.connectedTask(c)
 
-	nextNumber, err = readWithTimeout(reader, '\n', 5*time.Second)
-	c.Assert(err, IsNil)
-	c.Assert(string(nextNumber), Equals, "3\r\n") // TODO: just check that it's a higher number
+	expect(c, reader, "5\r\n")
 }
 
 func (s *PSSuite) TestProxyServerRejectsInvalidToken(c *C) {
-	config, err := websocket.NewConfig("ws://localhost:7331", "http://localhost")
-	config.Header.Add("X-Task-ID", "abc")
-	config.Header.Add("X-Task-Token", "some-bogus-token")
+	config := &ssh.ClientConfig{
+		User: s.taskID,
+		Auth: []ssh.ClientAuth{
+			ssh.ClientAuthPassword(PasswordAuth{"some-bogus-token"}),
+		},
+	}
 
-	c.Assert(err, IsNil)
-
-	ws, err := websocket.DialConfig(config)
-	c.Assert(err, IsNil)
-
-	reader := bufio.NewReader(ws)
-
-	errorMessage, err := readWithTimeout(reader, '\n', 1*time.Second)
-	c.Assert(err, IsNil)
-	c.Assert(string(errorMessage), Equals, "Invalid Token\n")
-
-	_, err = reader.ReadByte()
+	_, err := ssh.Dial("tcp", "localhost:7331", config)
 	c.Assert(err, NotNil)
 }
 
 func (s *PSSuite) TestProxyServerRejectsUnknownTask(c *C) {
-	config, err := websocket.NewConfig("ws://localhost:7331", "http://localhost")
-	config.Header.Add("X-Task-ID", "def")
+	config := &ssh.ClientConfig{
+		User: "some-bogus-task-id",
+		Auth: []ssh.ClientAuth{
+			ssh.ClientAuthPassword(PasswordAuth{s.task.SecureToken}),
+		},
+	}
 
-	c.Assert(err, IsNil)
-
-	ws, err := websocket.DialConfig(config)
-	c.Assert(err, IsNil)
-
-	reader := bufio.NewReader(ws)
-
-	errorMessage, err := readWithTimeout(reader, '\n', 1*time.Second)
-	c.Assert(err, IsNil)
-	c.Assert(string(errorMessage), Equals, "Unknown Task\n")
-
-	_, err = reader.ReadByte()
+	_, err := ssh.Dial("tcp", "localhost:7331", config)
 	c.Assert(err, NotNil)
 }
 
-func (s *PSSuite) connectedWebSocket(c *C) (*websocket.Conn, *bufio.Reader) {
-	config, err := websocket.NewConfig("ws://localhost:7331", "http://localhost")
-	config.Header.Add("X-Task-ID", "abc")
-	config.Header.Add("X-Task-Token", "some-token")
+func (s *PSSuite) connectedTask(c *C) (io.WriteCloser, *ex.Reader) {
+	config := &ssh.ClientConfig{
+		User: s.taskID,
+		Auth: []ssh.ClientAuth{
+			ssh.ClientAuthPassword(PasswordAuth{s.task.SecureToken}),
+		},
+	}
 
+	client, err := ssh.Dial("tcp", "localhost:7331", config)
 	c.Assert(err, IsNil)
 
-	ws, err := websocket.DialConfig(config)
+	session, err := client.NewSession()
 	c.Assert(err, IsNil)
 
-	return ws, bufio.NewReader(ws)
+	stdin, err := session.StdinPipe()
+	c.Assert(err, IsNil)
+
+	stdout, err := session.StdoutPipe()
+	c.Assert(err, IsNil)
+
+	reader := ex.New(bogusWriteCloser{stdout}, nil, 5*time.Second)
+
+	return stdin, reader
 }
 
-func readWithTimeout(reader *bufio.Reader, delim byte, timeout time.Duration) ([]byte, error) {
-	readResult := make(chan []byte)
-	errChannel := make(chan error)
+type PasswordAuth struct {
+	password string
+}
 
-	go func() {
-		res, err := reader.ReadBytes(delim)
-		if err != nil {
-			errChannel <- err
-		}
-
-		readResult <- res
-	}()
-
-	select {
-	case err := <-errChannel:
-		return nil, err
-	case res := <-readResult:
-		return res, nil
-	case <-time.After(timeout):
-		return nil, errors.New("timeout!")
-	}
+func (p PasswordAuth) Password(user string) (string, error) {
+	return p.password, nil
 }
