@@ -126,7 +126,7 @@ func (a *Agent) createTask(secureToken string, limits TaskLimits) (*Task, error)
 
 type startMessage struct {
 	Task                   string `json:"task"`
-	PublicKey              string `json:"public_key"`
+	SecureToken            string `json:"secure_token"`
 	MemoryLimitInMegabytes uint64 `json:"memory_limit"`
 	DiskLimitInMegabytes   uint64 `json:"disk_limit"`
 }
@@ -146,7 +146,7 @@ func (a *Agent) handleStart(start startMessage) {
 		DiskLimitInBytes:   start.DiskLimitInMegabytes * 1024 * 1024,
 	}
 
-	_, err := a.StartTask(start.Task, "", limits)
+	_, err := a.StartTask(start.Task, start.SecureToken, limits)
 	if err != nil {
 		log.Printf("Failed to create task: %s\n", err)
 		return

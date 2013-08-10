@@ -162,7 +162,7 @@ func (s *ASuite) TestAgentHandlesStartsAndStops(c *C) {
 	c.Assert(err, IsNil)
 
 	mbus.Publish("task.start", []byte(`
-	    {"task":"abc","memory_limit":128,"disk_limit":1}
+	    {"task":"abc","secure_token":"some-token","memory_limit":128,"disk_limit":1}
 	`))
 
 	// give agent time to set everything up
@@ -170,14 +170,16 @@ func (s *ASuite) TestAgentHandlesStartsAndStops(c *C) {
 	// TODO: less lazy solution
 	time.Sleep(1 * time.Second)
 
-	sess, found := agent.Registry.Lookup("abc")
+	task, found := agent.Registry.Lookup("abc")
 	c.Assert(found, Equals, true)
 
-	info, err := sess.Container.Info()
+	c.Assert(task.SecureToken, Equals, "some-token")
+
+	info, err := task.Container.Info()
 	c.Assert(err, IsNil)
 	c.Assert(info.MemoryLimitInBytes, Equals, uint64(128*1024*1024))
 
-	canWriteTooBig, err := sess.Container.Run(`ruby -e 'print("a" * 1024 * 1024 * 2)' > foo`)
+	canWriteTooBig, err := task.Container.Run(`ruby -e 'print("a" * 1024 * 1024 * 2)' > foo`)
 	c.Assert(err, IsNil)
 	c.Assert(canWriteTooBig.ExitStatus, Equals, uint32(1))
 
@@ -191,7 +193,7 @@ func (s *ASuite) TestAgentHandlesStartsAndStops(c *C) {
 	_, found = agent.Registry.Lookup("abc")
 	c.Assert(found, Equals, false)
 
-	_, err = sess.Container.Run("")
+	_, err = task.Container.Run("")
 	c.Assert(err, NotNil)
 	c.Assert(err.Error(), Equals, "unknown handle")
 }
