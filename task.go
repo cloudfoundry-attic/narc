@@ -2,7 +2,6 @@ package narc
 
 import (
 	"code.google.com/p/go.crypto/ssh"
-	"fmt"
 	"github.com/kr/pty"
 	"io"
 	"os"
@@ -13,6 +12,7 @@ type Task struct {
 	Container   Container
 	Limits      TaskLimits
 	SecureToken string
+	Command     *exec.Cmd
 
 	pty *os.File
 }
@@ -49,19 +49,7 @@ func (t *Task) run() (*os.File, error) {
 		return t.pty, nil
 	}
 
-	wshdSocket := fmt.Sprintf(
-		"/opt/warden/containers/%s/run/wshd.sock",
-		t.Container.ID(),
-	)
-
-	c := exec.Command(
-		"sudo",
-		"/opt/warden/warden/root/linux/skeleton/bin/wsh",
-		"--socket", wshdSocket,
-		"--user", "vcap",
-	)
-
-	pty, err := pty.Start(c)
+	pty, err := pty.Start(t.Command)
 	if err != nil {
 		return nil, err
 	}
@@ -106,18 +94,18 @@ func (t *Task) handleChannelRequests(pty *os.File, channel ssh.Channel) error {
 	panic("unreachable")
 }
 
-func (t *Task) handlePtyRequest(payload []byte) (ok bool) {
+func (t *Task) handlePtyRequest(payload []byte) bool {
 	cols, rows, ok := parsePtyRequest(payload)
 	if !ok {
-		return
+		return false
 	}
 
 	err := setWinSize(t.pty, cols, rows)
 	if err != nil {
-		ok = false
+		return false
 	}
 
-	return
+	return true
 }
 
 func (t *Task) handleWindowChange(payload []byte) (ok bool) {

@@ -3,10 +3,12 @@ package narc
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/cloudfoundry/go_cfmessagebus"
 	"github.com/nu7hatch/gouuid"
 	"github.com/vito/gordon"
 	"log"
+	"os/exec"
 )
 
 type AgentConfig struct {
@@ -121,6 +123,7 @@ func (a *Agent) createTask(secureToken string, limits TaskLimits) (*Task, error)
 		Container:   container,
 		SecureToken: secureToken,
 		Limits:      limits,
+		Command:     taskCommand(container),
 	}, nil
 }
 
@@ -164,4 +167,18 @@ func (a *Agent) handleStop(stop stopMessage) {
 		log.Printf("Failed to stop task: %s\n", err)
 		return
 	}
+}
+
+func taskCommand(container Container) *exec.Cmd {
+	wshdSocket := fmt.Sprintf(
+		"/opt/warden/containers/%s/run/wshd.sock",
+		container.ID(),
+	)
+
+	return exec.Command(
+		"sudo",
+		"/opt/warden/warden/root/linux/skeleton/bin/wsh",
+		"--socket", wshdSocket,
+		"--user", "vcap",
+	)
 }

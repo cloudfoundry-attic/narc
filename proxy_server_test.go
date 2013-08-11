@@ -81,8 +81,8 @@ func (s *PSSuite) TestProxyServerForwardsInput(c *C) {
 
 	writer.Write([]byte("echo hi\n"))
 
-	expect(c, reader, " echo hi\r\n")
-	expect(c, reader, "hi\r\n")
+	expect(c, reader, ` echo hi\r\n`)
+	expect(c, reader, `hi\r\n`)
 }
 
 func (s *PSSuite) TestProxyServerDestroysContainerWhenProcessEnds(c *C) {
@@ -92,7 +92,7 @@ func (s *PSSuite) TestProxyServerDestroysContainerWhenProcessEnds(c *C) {
 
 	writer.Write([]byte("exit\n"))
 
-	expect(c, reader, " exit\r\n")
+	expect(c, reader, ` exit\r\n`)
 
 	time.Sleep(1 * time.Second)
 
@@ -120,10 +120,10 @@ func (s *PSSuite) TestProxyServerAttachesToRunningProcess(c *C) {
 
 	expect(c, reader, fmt.Sprintf(`vcap@%s:~\$`, s.task.Container.ID()))
 
-	writer.Write([]byte("ruby -e 'a = 0; while true; sleep 1; a += 1; p a; end'\n"))
+	writer.Write([]byte("ruby -e 'a = 9; 10.times { p a; sleep 1; a += 1; }'\n"))
 
-	expect(c, reader, " ruby -e")
-	expect(c, reader, "1\r\n")
+	expect(c, reader, ` ruby -e '.*'\r\n`)
+	expect(c, reader, `9\r\n`)
 
 	writer.Close()
 
@@ -131,7 +131,7 @@ func (s *PSSuite) TestProxyServerAttachesToRunningProcess(c *C) {
 
 	writer, reader = s.connectedTask(c)
 
-	expect(c, reader, "5\r\n")
+	expect(c, reader, `\d{2}\r\n`)
 }
 
 func (s *PSSuite) TestProxyServerRejectsInvalidToken(c *C) {

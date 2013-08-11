@@ -124,8 +124,6 @@ func (p *ProxyServer) handleChannel(channel ssh.Channel, taskID string) {
 		return
 	}
 
-	defer channel.Close()
-
 	task, found := p.agent.Registry.Lookup(taskID)
 	if !found {
 		log.Println("unknown task:", task)
@@ -144,6 +142,8 @@ func (p *ProxyServer) handleChannel(channel ssh.Channel, taskID string) {
 		if err != nil {
 			panic(err)
 		}
+
+		channel.Close()
 
 		<-channelClosed
 
