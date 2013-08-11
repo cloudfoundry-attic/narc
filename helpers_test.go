@@ -8,6 +8,7 @@ import (
 	"github.com/vito/gordon"
 	. "launchpad.net/gocheck"
 	"net"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -133,6 +134,37 @@ func message2type(msg proto.Message) int32 {
 	}
 
 	panic("unknown message type")
+}
+
+func grabEphemeralPort() (int, error) {
+	listener, err := net.Listen("tcp", ":0")
+	if err != nil {
+		return 0, err
+	}
+
+	defer listener.Close()
+
+	_, portStr, err := net.SplitHostPort(listener.Addr().String())
+	if err != nil {
+		return 0, err
+	}
+
+	return strconv.Atoi(portStr)
+}
+
+func waitForPort(port int) error {
+	maxWait := 10
+	for i := 0; i < maxWait; i++ {
+		time.Sleep(500 * time.Millisecond)
+		conn, err := net.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+
+		if err == nil {
+			conn.Close()
+			return nil
+		}
+	}
+
+	return errors.New("port did not come open in time")
 }
 
 type fakeConn struct {

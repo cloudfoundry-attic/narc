@@ -13,6 +13,8 @@ import (
 type PSSuite struct {
 	ProxyServer *ProxyServer
 
+	serverAddr string
+
 	agent    *Agent
 	registry *Registry
 
@@ -58,7 +60,19 @@ func (s *PSSuite) SetUpTest(c *C) {
 		panic(err)
 	}
 
-	err = s.ProxyServer.Start(7331)
+	randomPort, err := grabEphemeralPort()
+	if err != nil {
+		randomPort = 7331
+	}
+
+	s.serverAddr = fmt.Sprintf("127.0.0.1:%d", randomPort)
+
+	err = s.ProxyServer.Start(randomPort)
+	if err != nil {
+		panic(err)
+	}
+
+	err = waitForPort(randomPort)
 	if err != nil {
 		panic(err)
 	}
@@ -120,7 +134,7 @@ func (s *PSSuite) TestProxyServerAttachesToRunningProcess(c *C) {
 
 	expect(c, reader, fmt.Sprintf(`vcap@%s:~\$`, s.task.Container.ID()))
 
-	writer.Write([]byte("ruby -e 'a = 9; 10.times { p a; sleep 1; a += 1; }'\n"))
+	writer.Write([]byte("ruby -e 'a = 9; while true; p a; sleep 1; a += 1; end'\n"))
 
 	expect(c, reader, ` ruby -e '.*'\r\n`)
 	expect(c, reader, `9\r\n`)
@@ -142,7 +156,7 @@ func (s *PSSuite) TestProxyServerRejectsInvalidToken(c *C) {
 		},
 	}
 
-	_, err := ssh.Dial("tcp", "localhost:7331", config)
+	_, err := ssh.Dial("tcp", s.serverAddr, config)
 	c.Assert(err, NotNil)
 }
 
@@ -154,7 +168,7 @@ func (s *PSSuite) TestProxyServerRejectsUnknownTask(c *C) {
 		},
 	}
 
-	_, err := ssh.Dial("tcp", "localhost:7331", config)
+	_, err := ssh.Dial("tcp", s.serverAddr, config)
 	c.Assert(err, NotNil)
 }
 
@@ -166,7 +180,7 @@ func (s *PSSuite) connectedTask(c *C) (io.WriteCloser, *ex.Reader) {
 		},
 	}
 
-	client, err := ssh.Dial("tcp", "localhost:7331", config)
+	client, err := ssh.Dial("tcp", s.serverAddr, config)
 	c.Assert(err, IsNil)
 
 	session, err := client.NewSession()
