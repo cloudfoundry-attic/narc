@@ -23,6 +23,28 @@ type TaskLimits struct {
 	DiskLimitInBytes   uint64
 }
 
+func NewTask(container Container, limits TaskLimits, secureToken string, command *exec.Cmd) (*Task, error) {
+	if limits.MemoryLimitInBytes != 0 {
+		err := container.LimitMemory(limits.MemoryLimitInBytes)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if limits.DiskLimitInBytes != 0 {
+		err := container.LimitDisk(limits.DiskLimitInBytes)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &Task{
+		Container:   container,
+		SecureToken: secureToken,
+		Command:     command,
+	}, nil
+}
+
 func (t *Task) Attach(channel ssh.Channel) (chan *os.ProcessState, chan error, error) {
 	in, out, err := t.run()
 	if err != nil {

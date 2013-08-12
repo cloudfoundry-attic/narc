@@ -30,6 +30,38 @@ type windowChangeMessage struct {
 	heightPixels uint32
 }
 
+func (s *TSuite) TestNewTaskDoesLimitsDisk(c *C) {
+	container := &FakeContainer{}
+
+	_, err := NewTask(container, TaskLimits{DiskLimitInBytes: 42}, "", nil)
+	c.Assert(err, IsNil)
+	c.Assert(*container.LimitedDisk, Equals, uint64(42))
+}
+
+func (s *TSuite) TestNewTaskDoesNotLimitDiskToZero(c *C) {
+	container := &FakeContainer{}
+
+	_, err := NewTask(container, TaskLimits{}, "", nil)
+	c.Assert(err, IsNil)
+	c.Assert(container.LimitedDisk, IsNil)
+}
+
+func (s *TSuite) TestNewTaskDoesLimitsMemory(c *C) {
+	container := &FakeContainer{}
+
+	_, err := NewTask(container, TaskLimits{MemoryLimitInBytes: 42}, "", nil)
+	c.Assert(err, IsNil)
+	c.Assert(*container.LimitedMemory, Equals, uint64(42))
+}
+
+func (s *TSuite) TestNewTaskDoesNotLimitMemoryToZero(c *C) {
+	container := &FakeContainer{}
+
+	_, err := NewTask(container, TaskLimits{}, "", nil)
+	c.Assert(err, IsNil)
+	c.Assert(container.LimitedMemory, IsNil)
+}
+
 func (s *TSuite) TestTaskRedirectsStdout(c *C) {
 	task := &Task{Command: exec.Command("echo", "hi")}
 

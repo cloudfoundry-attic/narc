@@ -139,9 +139,19 @@ func (s *PSSuite) TestProxyServerAttachesToRunningProcess(c *C) {
 
 	expect(c, reader, fmt.Sprintf(`vcap@%s:~\$`, s.task.Container.ID()))
 
-	writer.Write([]byte("ruby -e 'Thread.new { while true; puts \"---\"; sleep 0.5; end }; while true; puts gets.upcase; end'\n"))
+	writer.Write([]byte(`ruby -e '
+Thread.new do
+  while true
+    puts "---"
+    sleep 0.5
+  end
+end
 
-	expect(c, reader, ` ruby -e '.*'\r\n`)
+while true
+  puts gets.upcase
+end'`))
+
+	writer.Write([]byte("\n"))
 
 	expect(c, reader, `---\r\n`)
 

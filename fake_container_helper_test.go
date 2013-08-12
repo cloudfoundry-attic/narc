@@ -8,6 +8,9 @@ type FakeContainer struct {
 	LastCommand string
 	ShouldError bool
 	Handle      string
+
+	LimitedMemory *uint64
+	LimitedDisk   *uint64
 }
 
 func (c *FakeContainer) ID() string {
@@ -33,10 +36,12 @@ func (c *FakeContainer) NetIn() (MappedPort, error) {
 }
 
 func (c *FakeContainer) LimitMemory(limit uint64) error {
+	c.LimitedMemory = &limit
 	return nil
 }
 
 func (c *FakeContainer) LimitDisk(limit uint64) error {
+	c.LimitedDisk = &limit
 	return nil
 }
 

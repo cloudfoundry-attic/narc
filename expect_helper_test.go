@@ -95,7 +95,6 @@ func (e *Expector) match(regexp *regexp.Regexp, cancel chan bool) chan bool {
 			case <-e.listen:
 			case <-cancel:
 				return
-			case <-time.After(500 * time.Millisecond):
 			}
 		}
 	}()
@@ -108,12 +107,15 @@ func (e *Expector) monitor() {
 
 	for {
 		read, err := e.output.Read(buf[:])
+
+		if read > 0 {
+			e.buffer.Write(buf[:read])
+		}
+
 		if err != nil {
 			e.outputError <- err
 			break
 		}
-
-		e.buffer.Write(buf[:read])
 
 		e.notify()
 	}

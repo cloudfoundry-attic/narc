@@ -109,22 +109,7 @@ func (a *Agent) createTask(secureToken string, limits TaskLimits) (*Task, error)
 		return nil, err
 	}
 
-	err = container.LimitMemory(limits.MemoryLimitInBytes)
-	if err != nil {
-		return nil, err
-	}
-
-	err = container.LimitDisk(limits.DiskLimitInBytes)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Task{
-		Container:   container,
-		SecureToken: secureToken,
-		Limits:      limits,
-		Command:     taskCommand(container),
-	}, nil
+	return NewTask(container, limits, secureToken, taskCommand(container))
 }
 
 type startMessage struct {
