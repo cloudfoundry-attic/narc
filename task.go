@@ -51,7 +51,7 @@ func (t *Task) Attach(channel ssh.Channel) (chan *os.ProcessState, chan error, e
 		return nil, nil, err
 	}
 
-	channelClosed := make(chan error)
+	channelClosed := make(chan error, 1)
 
 	go io.Copy(channel, out)
 

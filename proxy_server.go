@@ -136,24 +136,19 @@ func (p *ProxyServer) handleChannel(channel ssh.Channel, taskID string) {
 		return
 	}
 
-	select {
-	case <-commandDone:
-		log.Println("command exited")
+	<-commandDone
 
-		err = p.agent.StopTask(taskID)
-		if err != nil {
-			panic(err)
-		}
+	log.Println("command exited")
 
-		log.Println("stopped task")
-
-		channel.Close()
-
-		<-channelClosed
-
-	case <-channelClosed:
-		log.Println("channel closed")
+	err = p.agent.StopTask(taskID)
+	if err != nil {
+		panic(err)
 	}
+
+	log.Println("stopped task")
+
+	channel.Close()
+	<-channelClosed
 }
 
 func generateHostKey() ([]byte, error) {

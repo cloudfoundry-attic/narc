@@ -119,6 +119,23 @@ func (s *PSSuite) TestProxyServerDestroysContainerWhenProcessEnds(c *C) {
 	c.Assert(err, NotNil)
 }
 
+func (s *PSSuite) TestProxyServerDestroysContainerWhenProcessEndsWhileDetached(c *C) {
+	client, writer, reader := s.connectedTask(c)
+
+	expect(c, reader, fmt.Sprintf(`vcap@%s:~\$`, s.task.Container.ID()))
+
+	writer.Write([]byte("sleep 1; exit\n"))
+
+	expect(c, reader, ` sleep 1; exit\r\n`)
+
+	client.Process.Kill()
+
+	time.Sleep(2 * time.Second)
+
+	_, err := s.task.Container.Run("")
+	c.Assert(err, NotNil)
+}
+
 func (s *PSSuite) TestProxyServerKeepsContainerOnDisconnect(c *C) {
 	_, writer, reader := s.connectedTask(c)
 
