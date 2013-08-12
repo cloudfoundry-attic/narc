@@ -14,7 +14,8 @@ type Task struct {
 	SecureToken string
 	Command     *exec.Cmd
 
-	pty *os.File
+	commandDone chan *os.ProcessState
+	pty         *os.File
 }
 
 type TaskLimits struct {
@@ -22,46 +23,52 @@ type TaskLimits struct {
 	DiskLimitInBytes   uint64
 }
 
-func (t *Task) Attach(channel ssh.Channel) (chan bool, chan error, error) {
-	pty, err := t.run()
+func (t *Task) Attach(channel ssh.Channel) (chan *os.ProcessState, chan error, error) {
+	in, out, err := t.run()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	commandDone := make(chan bool)
 	channelClosed := make(chan error)
 
-	go func() {
-		io.Copy(channel, pty)
-		commandDone <- true
-	}()
+	go io.Copy(channel, out)
 
 	go func() {
-		err := t.handleChannelRequests(pty, channel)
+		err := t.handleChannelRequests(in, channel)
 		channelClosed <- err
 	}()
 
-	return commandDone, channelClosed, nil
+	return t.commandDone, channelClosed, nil
 }
 
-func (t *Task) run() (*os.File, error) {
-	if t.pty != nil {
-		return t.pty, nil
+func (t *Task) run() (io.Writer, io.Reader, error) {
+	if t.pty == nil {
+		pty, err := pty.Start(t.Command)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		t.pty = pty
+		t.commandDone = t.reportExit()
 	}
 
-	pty, err := pty.Start(t.Command)
-	if err != nil {
-		return nil, err
-	}
-
-	t.pty = pty
-
-	return t.pty, nil
+	return t.pty, t.pty, nil
 }
 
-func (t *Task) handleChannelRequests(pty *os.File, channel ssh.Channel) error {
+func (t *Task) reportExit() chan *os.ProcessState {
+	done := make(chan *os.ProcessState, 1)
+
+	go func() {
+		t.Command.Wait()
+		done <- t.Command.ProcessState
+	}()
+
+	return done
+}
+
+func (t *Task) handleChannelRequests(in io.Writer, channel ssh.Channel) error {
 	for {
-		_, err := io.Copy(pty, channel)
+		_, err := io.Copy(in, channel)
 		if err == nil {
 			return err
 		}

@@ -5,6 +5,7 @@ import (
 	"code.google.com/p/go.crypto/ssh"
 	. "launchpad.net/gocheck"
 	"os/exec"
+	"syscall"
 	"time"
 )
 
@@ -134,5 +135,32 @@ func (s *TSuite) TestTaskAcceptsWindowChange(c *C) {
 	expect(c, reader, `50\r\n`)
 
 	<-done
+	<-closed
+}
+
+func (s *TSuite) TestTaskReportsCompletion(c *C) {
+	task := &Task{
+		Command: exec.Command("bash", "-c", "exit 42"),
+	}
+
+	channel := NewFakeChannel(
+		[]ssh.ChannelRequest{
+			ssh.ChannelRequest{
+				Request:   "window-change",
+				WantReply: true,
+				Payload: marshal(windowChangeMessage{
+					columns: 100,
+					rows:    50,
+				}),
+			},
+		},
+	)
+
+	done, closed, err := task.Attach(channel)
+	c.Assert(err, IsNil)
+
+	status := <-done
+	c.Assert(status.Sys().(syscall.WaitStatus).ExitStatus(), Equals, 42)
+
 	<-closed
 }
