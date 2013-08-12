@@ -1,7 +1,6 @@
 package narc
 
 import (
-	ex "bitbucket.org/teythoon/expect"
 	"code.google.com/p/go.crypto/ssh"
 	. "launchpad.net/gocheck"
 	"os/exec"
@@ -36,7 +35,7 @@ func (s *TSuite) TestTaskRedirectsStdout(c *C) {
 
 	channel := NewFakeChannel([]ssh.ChannelRequest{})
 
-	reader := ex.New(bogusWriteCloser{channel.readPipe}, nil, 1*time.Second)
+	reader := NewExpector(channel.readPipe, 1*time.Second)
 
 	done, closed, err := task.Attach(channel)
 	c.Assert(err, IsNil)
@@ -52,7 +51,7 @@ func (s *TSuite) TestTaskRedirectsStderr(c *C) {
 
 	channel := NewFakeChannel([]ssh.ChannelRequest{})
 
-	reader := ex.New(bogusWriteCloser{channel.readPipe}, nil, 1*time.Second)
+	reader := NewExpector(channel.readPipe, 1*time.Second)
 
 	done, closed, err := task.Attach(channel)
 	c.Assert(err, IsNil)
@@ -84,7 +83,7 @@ func (s *TSuite) TestTaskAcceptsPTYRequests(c *C) {
 		},
 	)
 
-	reader := ex.New(bogusWriteCloser{channel.readPipe}, nil, 1*time.Second)
+	reader := NewExpector(channel.readPipe, 5*time.Second)
 
 	done, closed, err := task.Attach(channel)
 	c.Assert(err, IsNil)
@@ -121,7 +120,7 @@ func (s *TSuite) TestTaskAcceptsWindowChange(c *C) {
 		},
 	)
 
-	reader := ex.New(bogusWriteCloser{channel.readPipe}, nil, 1*time.Second)
+	reader := NewExpector(channel.readPipe, 1*time.Second)
 
 	done, closed, err := task.Attach(channel)
 	c.Assert(err, IsNil)

@@ -1,19 +1,20 @@
 package narc
 
 import (
-	ex "bitbucket.org/teythoon/expect"
 	"code.google.com/p/go.crypto/ssh"
 	"fmt"
+	"github.com/kr/pty"
 	"github.com/nu7hatch/gouuid"
 	"io"
 	. "launchpad.net/gocheck"
+	"os/exec"
 	"time"
 )
 
 type PSSuite struct {
 	ProxyServer *ProxyServer
 
-	serverAddr string
+	serverPort int
 
 	agent    *Agent
 	registry *Registry
@@ -65,7 +66,7 @@ func (s *PSSuite) SetUpTest(c *C) {
 		randomPort = 7331
 	}
 
-	s.serverAddr = fmt.Sprintf("127.0.0.1:%d", randomPort)
+	s.serverPort = randomPort
 
 	err = s.ProxyServer.Start(randomPort)
 	if err != nil {
@@ -88,12 +89,12 @@ func (s *PSSuite) TearDownTest(c *C) {
 }
 
 func (s *PSSuite) TestProxyServerForwardsOutput(c *C) {
-	_, reader := s.connectedTask(c)
+	_, _, reader := s.connectedTask(c)
 	expect(c, reader, fmt.Sprintf(`vcap@%s:~\$`, s.task.Container.ID()))
 }
 
 func (s *PSSuite) TestProxyServerForwardsInput(c *C) {
-	writer, reader := s.connectedTask(c)
+	_, writer, reader := s.connectedTask(c)
 
 	expect(c, reader, fmt.Sprintf(`vcap@%s:~\$`, s.task.Container.ID()))
 
@@ -104,7 +105,7 @@ func (s *PSSuite) TestProxyServerForwardsInput(c *C) {
 }
 
 func (s *PSSuite) TestProxyServerDestroysContainerWhenProcessEnds(c *C) {
-	writer, reader := s.connectedTask(c)
+	_, writer, reader := s.connectedTask(c)
 
 	expect(c, reader, fmt.Sprintf(`vcap@%s:~\$`, s.task.Container.ID()))
 
@@ -119,7 +120,7 @@ func (s *PSSuite) TestProxyServerDestroysContainerWhenProcessEnds(c *C) {
 }
 
 func (s *PSSuite) TestProxyServerKeepsContainerOnDisconnect(c *C) {
-	writer, reader := s.connectedTask(c)
+	_, writer, reader := s.connectedTask(c)
 
 	expect(c, reader, fmt.Sprintf(`vcap@%s:~\$`, s.task.Container.ID()))
 
@@ -134,22 +135,27 @@ func (s *PSSuite) TestProxyServerKeepsContainerOnDisconnect(c *C) {
 }
 
 func (s *PSSuite) TestProxyServerAttachesToRunningProcess(c *C) {
-	writer, reader := s.connectedTask(c)
+	client, writer, reader := s.connectedTask(c)
 
 	expect(c, reader, fmt.Sprintf(`vcap@%s:~\$`, s.task.Container.ID()))
 
-	writer.Write([]byte("ruby -e 'a = 9; while true; p a; sleep 1; a += 1; end'\n"))
+	writer.Write([]byte("ruby -e 'Thread.new { while true; puts \"---\"; sleep 0.5; end }; while true; puts gets.upcase; end'\n"))
 
 	expect(c, reader, ` ruby -e '.*'\r\n`)
-	expect(c, reader, `9\r\n`)
 
-	writer.Close()
+	expect(c, reader, `---\r\n`)
 
-	time.Sleep(1 * time.Second)
+	writer.Write([]byte("hello\n"))
+	expect(c, reader, `HELLO\r\n`)
 
-	writer, reader = s.connectedTask(c)
+	client.Process.Kill()
 
-	expect(c, reader, `\d{2}\r\n`)
+	_, writer, reader = s.connectedTask(c)
+
+	expect(c, reader, `---\r\n`)
+
+	writer.Write([]byte("hello again\n"))
+	expect(c, reader, `HELLO AGAIN\r\n`)
 }
 
 func (s *PSSuite) TestProxyServerRejectsInvalidToken(c *C) {
@@ -160,7 +166,7 @@ func (s *PSSuite) TestProxyServerRejectsInvalidToken(c *C) {
 		},
 	}
 
-	_, err := ssh.Dial("tcp", s.serverAddr, config)
+	_, err := ssh.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", s.serverPort), config)
 	c.Assert(err, NotNil)
 }
 
@@ -172,33 +178,32 @@ func (s *PSSuite) TestProxyServerRejectsUnknownTask(c *C) {
 		},
 	}
 
-	_, err := ssh.Dial("tcp", s.serverAddr, config)
+	_, err := ssh.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", s.serverPort), config)
 	c.Assert(err, NotNil)
 }
 
-func (s *PSSuite) connectedTask(c *C) (io.WriteCloser, *ex.Reader) {
-	config := &ssh.ClientConfig{
-		User: s.taskID,
-		Auth: []ssh.ClientAuth{
-			ssh.ClientAuthPassword(PasswordAuth{s.task.SecureToken}),
-		},
-	}
+func (s *PSSuite) connectedTask(c *C) (*exec.Cmd, io.WriteCloser, *Expector) {
+	sshCmd := exec.Command(
+		"ssh",
+		"127.0.0.1",
+		"-o", "UserKnownHostsFile=/dev/null",
+		"-o", "StrictHostKeyChecking=no",
+		"-l", s.taskID,
+		"-p", fmt.Sprintf("%d", s.serverPort),
+	)
 
-	client, err := ssh.Dial("tcp", s.serverAddr, config)
+	pty, err := pty.Start(sshCmd)
 	c.Assert(err, IsNil)
 
-	session, err := client.NewSession()
-	c.Assert(err, IsNil)
+	// just so there's something sane
+	setWinSize(pty, 80, 24)
 
-	stdin, err := session.StdinPipe()
-	c.Assert(err, IsNil)
+	reader := NewExpector(pty, 5*time.Second)
 
-	stdout, err := session.StdoutPipe()
-	c.Assert(err, IsNil)
+	expect(c, reader, "password:")
+	pty.Write([]byte(fmt.Sprintf("%s\n", s.task.SecureToken)))
 
-	reader := ex.New(bogusWriteCloser{stdout}, nil, 5*time.Second)
-
-	return stdin, reader
+	return sshCmd, pty, reader
 }
 
 type PasswordAuth struct {
