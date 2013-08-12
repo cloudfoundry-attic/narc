@@ -79,6 +79,10 @@ func (s *PSSuite) SetUpTest(c *C) {
 }
 
 func (s *PSSuite) TearDownTest(c *C) {
+	if s.task.Command.Process != nil {
+		s.task.Command.Process.Kill()
+	}
+
 	s.agent.StopTask(s.taskID)
 	s.ProxyServer.Stop()
 }
