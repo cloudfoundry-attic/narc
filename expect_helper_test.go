@@ -93,6 +93,7 @@ func (e *Expector) match(regexp *regexp.Regexp, cancel chan bool) chan bool {
 
 			select {
 			case <-e.listen:
+			case <-time.After(100 * time.Millisecond):
 			case <-cancel:
 				return
 			}
