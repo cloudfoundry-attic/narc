@@ -138,16 +138,21 @@ func (p *ProxyServer) handleChannel(channel ssh.Channel, taskID string) {
 
 	select {
 	case <-commandDone:
-		err := p.agent.StopTask(taskID)
+		log.Println("command exited")
+
+		err = p.agent.StopTask(taskID)
 		if err != nil {
 			panic(err)
 		}
+
+		log.Println("stopped task")
 
 		channel.Close()
 
 		<-channelClosed
 
 	case <-channelClosed:
+		log.Println("channel closed")
 	}
 }
 
