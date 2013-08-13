@@ -6,6 +6,7 @@ import (
 	"io"
 	. "launchpad.net/gocheck"
 	"regexp"
+	"sync"
 	"time"
 )
 
@@ -25,6 +26,8 @@ type Expector struct {
 
 	offset int
 	buffer *bytes.Buffer
+
+	sync.RWMutex
 }
 
 type ExpectationFailed struct {
@@ -86,7 +89,7 @@ func (e *Expector) match(regexp *regexp.Regexp, cancel chan bool) chan bool {
 		for {
 			found := regexp.FindIndex(e.nextOutput())
 			if found != nil {
-				e.buffer.Next(found[1])
+				e.forwardOutput(found[1])
 				matchResult <- true
 				break
 			}
@@ -110,7 +113,7 @@ func (e *Expector) monitor() {
 		read, err := e.output.Read(buf[:])
 
 		if read > 0 {
-			e.buffer.Write(buf[:read])
+			e.addOutput(buf[:read])
 		}
 
 		if err != nil {
@@ -122,7 +125,25 @@ func (e *Expector) monitor() {
 	}
 }
 
+func (e *Expector) addOutput(out []byte) {
+	e.Lock()
+	defer e.Unlock()
+
+	e.buffer.Write(out)
+
+}
+
+func (e *Expector) forwardOutput(count int) {
+	e.Lock()
+	defer e.Unlock()
+
+	e.buffer.Next(count)
+
+}
 func (e *Expector) nextOutput() []byte {
+	e.RLock()
+	defer e.RUnlock()
+
 	return e.buffer.Bytes()
 }
 
