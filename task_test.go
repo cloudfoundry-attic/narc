@@ -92,9 +92,12 @@ func (s *TSuite) TestTaskAcceptsPTYRequests(c *C) {
 	err := task.Attach(channel)
 	c.Assert(err, IsNil)
 
-	time.Sleep(100 * time.Millisecond)
-
-	c.Assert(channel.Acked, Equals, true)
+	select {
+	case acked := <-channel.Acks:
+		c.Assert(acked, Equals, true)
+	case <-time.After(1 * time.Second):
+		c.Error("pty-req not acknowledged")
+	}
 
 	expect(c, reader, `hello\r\n`)
 	expect(c, reader, `100\r\n`)
@@ -107,7 +110,7 @@ func (s *TSuite) TestTaskAcceptsWindowChange(c *C) {
 		container,
 		"floofy_flubber",
 		exec.Command(
-			"bash", "-c", "echo hello; sleep 1; tput cols; tput lines",
+			"bash", "-c", "echo hello; sleep 0.1; tput cols; tput lines",
 		),
 	)
 
@@ -129,9 +132,12 @@ func (s *TSuite) TestTaskAcceptsWindowChange(c *C) {
 	err := task.Attach(channel)
 	c.Assert(err, IsNil)
 
-	time.Sleep(100 * time.Millisecond)
-
-	c.Assert(channel.Acked, Equals, true)
+	select {
+	case acked := <-channel.Acks:
+		c.Assert(acked, Equals, true)
+	case <-time.After(1 * time.Second):
+		c.Error("pty-req not acknowledged")
+	}
 
 	expect(c, reader, `hello\r\n`)
 	expect(c, reader, `100\r\n`)
@@ -182,11 +188,11 @@ func (s *TSuite) TestTaskStopDestroysContainer(c *C) {
 
 	task, _ := NewTask(container, "floofy_flubber", exec.Command("ls"))
 
-	c.Assert(container.Destroyed, Equals, false)
+	c.Assert(container.IsDestroyed(), Equals, false)
 
 	task.Stop()
 
-	c.Assert(container.Destroyed, Equals, true)
+	c.Assert(container.IsDestroyed(), Equals, true)
 }
 
 func (s *TSuite) TestTaskCompletionDestroysContainer(c *C) {
@@ -194,7 +200,7 @@ func (s *TSuite) TestTaskCompletionDestroysContainer(c *C) {
 
 	task, _ := NewTask(container, "floofy_flubber", exec.Command("bash", "-c", "exit 0"))
 
-	c.Assert(container.Destroyed, Equals, false)
+	c.Assert(container.IsDestroyed(), Equals, false)
 
 	called := make(chan bool)
 
@@ -205,7 +211,7 @@ func (s *TSuite) TestTaskCompletionDestroysContainer(c *C) {
 
 	select {
 	case <-called:
-		c.Assert(container.Destroyed, Equals, true)
+		c.Assert(container.IsDestroyed(), Equals, true)
 	case <-time.After(1 * time.Second):
 		c.Error("Was not notified of task completion!")
 	}

@@ -93,7 +93,7 @@ func (s *ASuite) TestAgentTaskLifecycle(c *C) {
 	_, found = s.Agent.Registry.Lookup("some-guid")
 	c.Assert(found, Equals, false)
 
-	c.Assert(container.Destroyed, Equals, true)
+	c.Assert(container.IsDestroyed(), Equals, true)
 }
 
 func (s *ASuite) TestAgentTeardownNotExistantContainer(c *C) {

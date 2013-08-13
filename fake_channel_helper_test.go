@@ -6,7 +6,7 @@ import (
 )
 
 type FakeChannel struct {
-	Acked bool
+	Acks chan bool
 
 	requests []ssh.ChannelRequest
 
@@ -21,6 +21,8 @@ func NewFakeChannel(requests []ssh.ChannelRequest) *FakeChannel {
 	read, write := io.Pipe()
 
 	return &FakeChannel{
+		Acks: make(chan bool),
+
 		requests:  requests,
 		writePipe: write,
 		readPipe:  read,
@@ -59,7 +61,11 @@ func (f *FakeChannel) Stderr() io.Writer {
 }
 
 func (f *FakeChannel) AckRequest(ok bool) error {
-	f.Acked = ok
+	select {
+	case f.Acks <- ok:
+	default:
+	}
+
 	return nil
 }
 

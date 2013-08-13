@@ -241,7 +241,7 @@ func (s *PSSuite) TestAgentTaskDiskLimitsEnforcesQuota(c *C) {
 
 	writer.Write([]byte("du foo.txt | awk '{print $1}'\n"))
 
-	expect(c, reader, "512")
+	expect(c, reader, "512\r\n")
 
 	expect(c, reader, fmt.Sprintf(`vcap@%s:~\$`, s.task.container.ID()))
 
