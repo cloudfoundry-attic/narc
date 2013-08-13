@@ -4,6 +4,7 @@ import (
 	"code.google.com/p/go.crypto/ssh"
 	"github.com/kr/pty"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 )
@@ -104,6 +105,9 @@ func (t *Task) handleChannelRequests(in io.Writer, channel ssh.Channel) error {
 
 		case "env":
 			ok = true
+
+		default:
+			log.Println("ignoring channel request:", req.Request)
 		}
 
 		if req.WantReply {
