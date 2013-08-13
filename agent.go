@@ -3,10 +3,12 @@ package narc
 import (
 	"encoding/json"
 	"errors"
-	"github.com/cloudfoundry/go_cfmessagebus"
-	"github.com/nu7hatch/gouuid"
 	"log"
 	"os/exec"
+
+	"github.com/cloudfoundry/gibson"
+	"github.com/cloudfoundry/go_cfmessagebus"
+	"github.com/nu7hatch/gouuid"
 )
 
 type Agent struct {
@@ -14,6 +16,14 @@ type Agent struct {
 	Registry *Registry
 
 	taskBackend TaskBackend
+
+	routerClient gibson.RouterClient
+	routerPort   int
+}
+
+type RouterRegistrar interface {
+	Register(string, int)
+	Unregister(string, int)
 }
 
 type TaskBackend interface {
@@ -39,7 +49,7 @@ type stopMessage struct {
 
 var TaskNotRegistered = errors.New("task not registered")
 
-func NewAgent(taskBackend TaskBackend) (*Agent, error) {
+func NewAgent(taskBackend TaskBackend, routerClient gibson.RouterClient, port int) (*Agent, error) {
 	id, err := uuid.NewV4()
 	if err != nil {
 		return nil, err
@@ -50,6 +60,9 @@ func NewAgent(taskBackend TaskBackend) (*Agent, error) {
 		Registry: NewRegistry(),
 
 		taskBackend: taskBackend,
+
+		routerClient: routerClient,
+		routerPort:   port,
 	}, nil
 }
 
@@ -119,10 +132,11 @@ func (a *Agent) startTask(guid, secureToken string, limits TaskLimits) (*Task, e
 
 	a.Registry.Register(guid, task)
 
+	a.routerClient.Register(a.routerPort, guid)
+
 	task.OnComplete(func() {
 		log.Println("task completed:", guid)
-
-		a.Registry.Unregister(guid)
+		a.cleanUpGuid(guid)
 	})
 
 	return task, nil
@@ -134,7 +148,7 @@ func (a *Agent) stopTask(guid string) error {
 		return TaskNotRegistered
 	}
 
-	a.Registry.Unregister(guid)
+	a.cleanUpGuid(guid)
 
 	err := task.Stop()
 	if err != nil {
@@ -142,6 +156,11 @@ func (a *Agent) stopTask(guid string) error {
 	}
 
 	return nil
+}
+
+func (a *Agent) cleanUpGuid(guid string) {
+	a.routerClient.Unregister(a.routerPort, guid)
+	a.Registry.Unregister(guid)
 }
 
 func (a *Agent) createTaskContainer(limits TaskLimits) (Container, error) {

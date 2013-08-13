@@ -2,9 +2,11 @@ package main
 
 import (
 	"flag"
+	"log"
+
+	"github.com/cloudfoundry/gibson"
 	"github.com/cloudfoundry/go_cfmessagebus"
 	"github.com/vito/narc"
-	"log"
 )
 
 var configFile = flag.String("config", "", "path to config file")
@@ -44,7 +46,12 @@ func main() {
 		WardenContainersPath: config.WardenContainersPath,
 	}
 
-	agent, err := narc.NewAgent(containerProvider)
+	routerClient := gibson.NewCFRouterClient("127.0.0.1", mbus)
+	routerClient.Greet()
+
+	proxyServerPort := 8081
+
+	agent, err := narc.NewAgent(containerProvider, routerClient, proxyServerPort)
 	if err != nil {
 		log.Fatal(err.Error())
 		return
@@ -68,7 +75,7 @@ func main() {
 		return
 	}
 
-	err = server.Start(8081)
+	err = server.Start(proxyServerPort)
 	if err != nil {
 		log.Fatal(err.Error())
 		return

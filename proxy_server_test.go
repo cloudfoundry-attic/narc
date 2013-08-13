@@ -1,19 +1,24 @@
 package narc
 
 import (
-	"code.google.com/p/go.crypto/ssh"
+	. "launchpad.net/gocheck"
+
+	"encoding/json"
 	"fmt"
+	"io"
+	"os/exec"
+	"time"
+
+	"code.google.com/p/go.crypto/ssh"
+	"github.com/cloudfoundry/gibson"
 	"github.com/cloudfoundry/go_cfmessagebus/mock_cfmessagebus"
 	"github.com/kr/pty"
 	"github.com/nu7hatch/gouuid"
-	"io"
-	. "launchpad.net/gocheck"
-	"os/exec"
-	"time"
 )
 
 type PSSuite struct {
 	ProxyServer *ProxyServer
+	MessageBus  *mock_cfmessagebus.MockMessageBus
 
 	serverPort int
 
@@ -33,18 +38,26 @@ func (s *PSSuite) SetUpTest(c *C) {
 		WardenContainersPath: "/opt/warden/containers",
 	}
 
-	agent, err := NewAgent(backend)
+	s.MessageBus = mock_cfmessagebus.NewMockMessageBus()
+
+	routerClient := gibson.NewCFRouterClient("127.0.0.1", s.MessageBus)
+	routerClient.Greet()
+
+	randomPort, err := grabEphemeralPort()
+	if err != nil {
+		randomPort = 7331
+	}
+
+	agent, err := NewAgent(backend, routerClient, randomPort)
 
 	if err != nil {
 		panic(err)
 	}
 
-	messageBus := mock_cfmessagebus.NewMockMessageBus()
-
-	err = agent.HandleStarts(messageBus)
+	err = agent.HandleStarts(s.MessageBus)
 	c.Assert(err, IsNil)
 
-	err = agent.HandleStops(messageBus)
+	err = agent.HandleStops(s.MessageBus)
 	c.Assert(err, IsNil)
 
 	taskUUID, err := uuid.NewV4()
@@ -59,7 +72,7 @@ func (s *PSSuite) SetUpTest(c *C) {
 
 	s.taskID = taskUUID.String()
 
-	messageBus.PublishSync("task.start", []byte(fmt.Sprintf(`
+	s.MessageBus.PublishSync("task.start", []byte(fmt.Sprintf(`
 	    {"task":"%s","secure_token":"%s","memory_limit":32,"disk_limit":1}
 	`, s.taskID, taskToken.String())))
 
@@ -71,11 +84,6 @@ func (s *PSSuite) SetUpTest(c *C) {
 	s.ProxyServer, err = NewProxyServer(agent.Registry)
 	if err != nil {
 		panic(err)
-	}
-
-	randomPort, err := grabEphemeralPort()
-	if err != nil {
-		randomPort = 7331
 	}
 
 	s.serverPort = randomPort
@@ -94,6 +102,56 @@ func (s *PSSuite) SetUpTest(c *C) {
 func (s *PSSuite) TearDownTest(c *C) {
 	s.task.Stop()
 	s.ProxyServer.Stop()
+}
+
+func (s *PSSuite) TestTaskIsRoutable(c *C) {
+	receivedMessage := make(chan []byte)
+	s.MessageBus.Subscribe("router.register", func(message []byte) {
+		receivedMessage <- message
+	})
+
+	s.MessageBus.Publish("router.start", []byte(`{"minimumRegisterIntervalInSeconds":1}`))
+
+	select {
+	case msg := <-receivedMessage:
+		var message gibson.RegistryMessage
+		err := json.Unmarshal(msg, &message)
+		c.Assert(err, IsNil)
+
+		c.Assert(message.URIs[0], Equals, s.taskID)
+		c.Assert(message.Host, Equals, "127.0.0.1")
+		c.Assert(message.Port, Equals, s.serverPort)
+	case <-time.After(1100 * time.Millisecond):
+		c.Error("Task was not registered with the router.")
+	}
+}
+
+func (s *PSSuite) TestCompletedTaskIsUnregisteredWithTheRouter(c *C) {
+	receivedMessage := make(chan []byte)
+	s.MessageBus.Subscribe("router.unregister", func(message []byte) {
+		receivedMessage <- message
+	})
+
+	_, writer, reader := s.connectedTask(c)
+
+	expect(c, reader, fmt.Sprintf(`vcap@%s:~\$`, s.task.container.ID()))
+
+	writer.Write([]byte("exit\n"))
+
+	expect(c, reader, ` exit\r\n`)
+
+	select {
+	case msg := <-receivedMessage:
+		var message gibson.RegistryMessage
+		err := json.Unmarshal(msg, &message)
+		c.Assert(err, IsNil)
+
+		c.Assert(message.URIs[0], Equals, s.taskID)
+		c.Assert(message.Host, Equals, "127.0.0.1")
+		c.Assert(message.Port, Equals, s.serverPort)
+	case <-time.After(1 * time.Second):
+		c.Error("Task was not registered with the router.")
+	}
 }
 
 func (s *PSSuite) TestProxyServerForwardsOutput(c *C) {

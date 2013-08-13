@@ -1,14 +1,19 @@
 package narc
 
 import (
-	"github.com/cloudfoundry/go_cfmessagebus/mock_cfmessagebus"
 	. "launchpad.net/gocheck"
+
 	"time"
+
+	"github.com/cloudfoundry/gibson/fake_router_client"
+	"github.com/cloudfoundry/go_cfmessagebus/mock_cfmessagebus"
 )
 
 type ASuite struct {
-	Agent      *Agent
-	MessageBus *mock_cfmessagebus.MockMessageBus
+	Agent *Agent
+
+	RouterClient *fake_gibson.FakeRouterClient
+	MessageBus   *mock_cfmessagebus.MockMessageBus
 }
 
 func init() {
@@ -26,12 +31,14 @@ func (s *ASuite) FakeContainerForGuid(c *C, guid string) *FakeContainer {
 }
 
 func (s *ASuite) SetUpTest(c *C) {
-	s.MessageBus = mock_cfmessagebus.NewMockMessageBus()
+	s.RouterClient = fake_gibson.NewFakeRouterClient()
 
-	agent, err := NewAgent(FakeTaskBackend{})
+	agent, err := NewAgent(FakeTaskBackend{}, s.RouterClient, 42)
 	c.Assert(err, IsNil)
 
 	s.Agent = agent
+
+	s.MessageBus = mock_cfmessagebus.NewMockMessageBus()
 
 	err = agent.HandleStarts(s.MessageBus)
 	c.Assert(err, IsNil)
@@ -40,40 +47,14 @@ func (s *ASuite) SetUpTest(c *C) {
 	c.Assert(err, IsNil)
 }
 
-func (s *ASuite) TestAgentTaskCreationDoesDiskLimits(c *C) {
-	s.MessageBus.PublishSync("task.start", []byte(`
-	    {"task":"some-guid","secure_token":"some-token","memory_limit":1,"disk_limit":32}
-	`))
+func (s *ASuite) TestAgentIDIsUnique(c *C) {
+	agent1, err := NewAgent(WardenTaskBackend{}, nil, 0)
+	c.Assert(err, IsNil)
 
-	container := s.FakeContainerForGuid(c, "some-guid")
-	c.Assert(*container.LimitedDisk, Equals, uint64(32*1024*1024))
-}
+	agent2, err := NewAgent(WardenTaskBackend{}, nil, 0)
+	c.Assert(err, IsNil)
 
-func (s *ASuite) TestNewTaskDoesNotLimitDiskToZero(c *C) {
-	s.MessageBus.PublishSync("task.start", []byte(`
-	    {"task":"some-guid","secure_token":"some-token","memory_limit":1}
-	`))
-
-	container := s.FakeContainerForGuid(c, "some-guid")
-	c.Assert(container.LimitedDisk, IsNil)
-}
-
-func (s *ASuite) TestAgentTaskCreationDoesMemoryLimits(c *C) {
-	s.MessageBus.PublishSync("task.start", []byte(`
-	    {"task":"some-guid","secure_token":"some-token","memory_limit":3,"disk_limit":1}
-	`))
-
-	container := s.FakeContainerForGuid(c, "some-guid")
-	c.Assert(*container.LimitedMemory, Equals, uint64(3*1024*1024))
-}
-
-func (s *ASuite) TestNewTaskDoesNotLimitMemoryToZero(c *C) {
-	s.MessageBus.PublishSync("task.start", []byte(`
-	    {"task":"some-guid","secure_token":"some-token","disk_limit":4}
-	`))
-
-	container := s.FakeContainerForGuid(c, "some-guid")
-	c.Assert(container.LimitedMemory, IsNil)
+	c.Assert(agent1.ID, Not(Equals), agent2.ID)
 }
 
 func (s *ASuite) TestAgentTaskLifecycle(c *C) {
@@ -122,22 +103,76 @@ func (s *ASuite) TestAgentUnregistersTaskOnCompletion(c *C) {
 	c.Assert(task.SecureToken, Equals, "some-token")
 	c.Assert(task.container, NotNil)
 
+	c.Assert(s.RouterClient.IsRegistered(42, "some-guid"), Equals, true)
+
 	task.Start()
 	task.Stop()
 
-	// give agent time to unregister
-	time.Sleep(100 * time.Millisecond)
+	removedFromRegistry := make(chan bool)
 
-	_, found = s.Agent.Registry.Lookup("some-guid")
-	c.Assert(found, Equals, false)
+	go func() {
+		for {
+			_, found := s.Agent.Registry.Lookup("some-guid")
+			if !found {
+				removedFromRegistry <- true
+			}
+
+			time.Sleep(1 * time.Millisecond)
+		}
+	}()
+
+	select {
+	case <-removedFromRegistry:
+		c.Assert(s.RouterClient.IsRegistered(42, "some-guid"), Equals, false)
+	case <-time.After(1 * time.Second):
+		c.Error("Task was not removed from the registry.")
+	}
 }
 
-func (s *ASuite) TestAgentIDIsUnique(c *C) {
-	agent1, err := NewAgent(WardenTaskBackend{})
-	c.Assert(err, IsNil)
+func (s *ASuite) TestAgentRegisterAndUnregistersTaskWithRouter(c *C) {
+	s.MessageBus.PublishSync("task.start", []byte(`
+	    {"task":"some-guid","secure_token":"some-token","memory_limit":32,"disk_limit":1}
+	`))
 
-	agent2, err := NewAgent(WardenTaskBackend{})
-	c.Assert(err, IsNil)
+	c.Assert(s.RouterClient.IsRegistered(42, "some-guid"), Equals, true)
 
-	c.Assert(agent1.ID, Not(Equals), agent2.ID)
+	s.MessageBus.PublishSync("task.stop", []byte(`{"task":"some-guid"}`))
+
+	c.Assert(s.RouterClient.IsRegistered(42, "some-guid"), Equals, false)
+}
+
+func (s *ASuite) TestAgentTaskCreationDoesDiskLimits(c *C) {
+	s.MessageBus.PublishSync("task.start", []byte(`
+	    {"task":"some-guid","secure_token":"some-token","memory_limit":1,"disk_limit":32}
+	`))
+
+	container := s.FakeContainerForGuid(c, "some-guid")
+	c.Assert(*container.LimitedDisk, Equals, uint64(32*1024*1024))
+}
+
+func (s *ASuite) TestNewTaskDoesNotLimitDiskToZero(c *C) {
+	s.MessageBus.PublishSync("task.start", []byte(`
+	    {"task":"some-guid","secure_token":"some-token","memory_limit":1}
+	`))
+
+	container := s.FakeContainerForGuid(c, "some-guid")
+	c.Assert(container.LimitedDisk, IsNil)
+}
+
+func (s *ASuite) TestAgentTaskCreationDoesMemoryLimits(c *C) {
+	s.MessageBus.PublishSync("task.start", []byte(`
+	    {"task":"some-guid","secure_token":"some-token","memory_limit":3,"disk_limit":1}
+	`))
+
+	container := s.FakeContainerForGuid(c, "some-guid")
+	c.Assert(*container.LimitedMemory, Equals, uint64(3*1024*1024))
+}
+
+func (s *ASuite) TestNewTaskDoesNotLimitMemoryToZero(c *C) {
+	s.MessageBus.PublishSync("task.start", []byte(`
+	    {"task":"some-guid","secure_token":"some-token","disk_limit":4}
+	`))
+
+	container := s.FakeContainerForGuid(c, "some-guid")
+	c.Assert(container.LimitedMemory, IsNil)
 }
