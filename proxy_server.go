@@ -12,21 +12,21 @@ import (
 )
 
 type ProxyServer struct {
-	agent   *Agent
-	hostKey []byte
+	registry *Registry
+	hostKey  []byte
 
 	listener *ssh.Listener
 }
 
-func NewProxyServer(agent *Agent) (*ProxyServer, error) {
+func NewProxyServer(registry *Registry) (*ProxyServer, error) {
 	key, err := generateHostKey()
 	if err != nil {
 		return nil, err
 	}
 
 	return &ProxyServer{
-		agent:   agent,
-		hostKey: key,
+		registry: registry,
+		hostKey:  key,
 	}, nil
 }
 
@@ -65,7 +65,7 @@ func (p *ProxyServer) Stop() error {
 func (p *ProxyServer) verifyTaskAccess(conn *ssh.ServerConn, user, password string) bool {
 	log.Println("verifying:", user, password)
 
-	task, found := p.agent.Registry.Lookup(user)
+	task, found := p.registry.Lookup(user)
 	if !found {
 		log.Println("verify failed: task not found")
 		return false
@@ -124,31 +124,19 @@ func (p *ProxyServer) handleChannel(channel ssh.Channel, taskID string) {
 		return
 	}
 
-	task, found := p.agent.Registry.Lookup(taskID)
+	task, found := p.registry.Lookup(taskID)
 	if !found {
 		log.Println("unknown task:", task)
 		return
 	}
 
-	commandDone, channelClosed, err := task.Attach(channel)
+	task.OnComplete(func() { channel.Close() })
+
+	err = task.Attach(channel)
 	if err != nil {
 		log.Println("failed to execute task:", err)
 		return
 	}
-
-	<-commandDone
-
-	log.Println("command exited")
-
-	err = p.agent.StopTask(taskID)
-	if err != nil {
-		panic(err)
-	}
-
-	log.Println("stopped task")
-
-	channel.Close()
-	<-channelClosed
 }
 
 func generateHostKey() ([]byte, error) {

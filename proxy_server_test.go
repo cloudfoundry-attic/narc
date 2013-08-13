@@ -3,6 +3,7 @@ package narc
 import (
 	"code.google.com/p/go.crypto/ssh"
 	"fmt"
+	"github.com/cloudfoundry/go_cfmessagebus/mock_cfmessagebus"
 	"github.com/kr/pty"
 	"github.com/nu7hatch/gouuid"
 	"io"
@@ -16,7 +17,6 @@ type PSSuite struct {
 
 	serverPort int
 
-	agent    *Agent
 	registry *Registry
 
 	task   *Task
@@ -28,14 +28,23 @@ func init() {
 }
 
 func (s *PSSuite) SetUpTest(c *C) {
-	agent, err := NewAgent(AgentConfig{
+	containerProvider := WardenContainerProvider{
 		WardenSocketPath: "/tmp/warden.sock",
-	})
+	}
+
+	agent, err := NewAgent(containerProvider)
+
 	if err != nil {
 		panic(err)
 	}
 
-	s.agent = agent
+	messageBus := mock_cfmessagebus.NewMockMessageBus()
+
+	err = agent.HandleStarts(messageBus)
+	c.Assert(err, IsNil)
+
+	err = agent.HandleStops(messageBus)
+	c.Assert(err, IsNil)
 
 	taskUUID, err := uuid.NewV4()
 	if err != nil {
@@ -49,14 +58,16 @@ func (s *PSSuite) SetUpTest(c *C) {
 
 	s.taskID = taskUUID.String()
 
-	task, err := agent.StartTask(s.taskID, taskToken.String(), TaskLimits{})
-	if err != nil {
-		panic(err)
-	}
+	messageBus.PublishSync("task.start", []byte(fmt.Sprintf(`
+	    {"task":"%s","secure_token":"%s","memory_limit":32,"disk_limit":1}
+	`, s.taskID, taskToken.String())))
+
+	task, found := agent.Registry.Lookup(s.taskID)
+	c.Assert(found, Equals, true)
 
 	s.task = task
 
-	s.ProxyServer, err = NewProxyServer(agent)
+	s.ProxyServer, err = NewProxyServer(agent.Registry)
 	if err != nil {
 		panic(err)
 	}
@@ -80,23 +91,19 @@ func (s *PSSuite) SetUpTest(c *C) {
 }
 
 func (s *PSSuite) TearDownTest(c *C) {
-	if s.task.Command.Process != nil {
-		s.task.Command.Process.Kill()
-	}
-
-	s.agent.StopTask(s.taskID)
+	s.task.Stop()
 	s.ProxyServer.Stop()
 }
 
 func (s *PSSuite) TestProxyServerForwardsOutput(c *C) {
 	_, _, reader := s.connectedTask(c)
-	expect(c, reader, fmt.Sprintf(`vcap@%s:~\$`, s.task.Container.ID()))
+	expect(c, reader, fmt.Sprintf(`vcap@%s:~\$`, s.task.container.ID()))
 }
 
 func (s *PSSuite) TestProxyServerForwardsInput(c *C) {
 	_, writer, reader := s.connectedTask(c)
 
-	expect(c, reader, fmt.Sprintf(`vcap@%s:~\$`, s.task.Container.ID()))
+	expect(c, reader, fmt.Sprintf(`vcap@%s:~\$`, s.task.container.ID()))
 
 	writer.Write([]byte("echo hi\n"))
 
@@ -107,7 +114,7 @@ func (s *PSSuite) TestProxyServerForwardsInput(c *C) {
 func (s *PSSuite) TestProxyServerDestroysContainerWhenProcessEnds(c *C) {
 	_, writer, reader := s.connectedTask(c)
 
-	expect(c, reader, fmt.Sprintf(`vcap@%s:~\$`, s.task.Container.ID()))
+	expect(c, reader, fmt.Sprintf(`vcap@%s:~\$`, s.task.container.ID()))
 
 	writer.Write([]byte("exit\n"))
 
@@ -115,14 +122,14 @@ func (s *PSSuite) TestProxyServerDestroysContainerWhenProcessEnds(c *C) {
 
 	time.Sleep(1 * time.Second)
 
-	_, err := s.task.Container.Run("")
+	_, err := s.task.container.Run("")
 	c.Assert(err, NotNil)
 }
 
 func (s *PSSuite) TestProxyServerDestroysContainerWhenProcessEndsWhileDetached(c *C) {
 	client, writer, reader := s.connectedTask(c)
 
-	expect(c, reader, fmt.Sprintf(`vcap@%s:~\$`, s.task.Container.ID()))
+	expect(c, reader, fmt.Sprintf(`vcap@%s:~\$`, s.task.container.ID()))
 
 	writer.Write([]byte("sleep 1; exit\n"))
 
@@ -132,20 +139,20 @@ func (s *PSSuite) TestProxyServerDestroysContainerWhenProcessEndsWhileDetached(c
 
 	time.Sleep(2 * time.Second)
 
-	_, err := s.task.Container.Run("")
+	_, err := s.task.container.Run("")
 	c.Assert(err, NotNil)
 }
 
 func (s *PSSuite) TestProxyServerKeepsContainerOnDisconnect(c *C) {
 	_, writer, reader := s.connectedTask(c)
 
-	expect(c, reader, fmt.Sprintf(`vcap@%s:~\$`, s.task.Container.ID()))
+	expect(c, reader, fmt.Sprintf(`vcap@%s:~\$`, s.task.container.ID()))
 
 	writer.Close()
 
 	time.Sleep(1 * time.Second)
 
-	res, err := s.task.Container.Run("exit 42")
+	res, err := s.task.container.Run("exit 42")
 	c.Assert(err, IsNil)
 
 	c.Assert(res.ExitStatus, Equals, uint32(42))
@@ -154,7 +161,7 @@ func (s *PSSuite) TestProxyServerKeepsContainerOnDisconnect(c *C) {
 func (s *PSSuite) TestProxyServerAttachesToRunningProcess(c *C) {
 	client, writer, reader := s.connectedTask(c)
 
-	expect(c, reader, fmt.Sprintf(`vcap@%s:~\$`, s.task.Container.ID()))
+	expect(c, reader, fmt.Sprintf(`vcap@%s:~\$`, s.task.container.ID()))
 
 	writer.Write([]byte(`ruby -e '
 Thread.new do
@@ -207,6 +214,40 @@ func (s *PSSuite) TestProxyServerRejectsUnknownTask(c *C) {
 
 	_, err := ssh.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", s.serverPort), config)
 	c.Assert(err, NotNil)
+}
+
+func (s *PSSuite) TestAgentTaskMemoryLimitsMakesTaskDie(c *C) {
+	_, writer, reader := s.connectedTask(c)
+
+	expect(c, reader, fmt.Sprintf(`vcap@%s:~\$`, s.task.container.ID()))
+
+	writer.Write([]byte("ruby -e \"'a'*10*1024*1024\"\n"))
+
+	expect(c, reader, fmt.Sprintf(`vcap@%s:~\$`, s.task.container.ID()))
+
+	writer.Write([]byte("ruby -e \"'a'*33*1024*1024\"\n"))
+
+	expect(c, reader, "Killed")
+}
+
+func (s *PSSuite) TestAgentTaskDiskLimitsEnforcesQuota(c *C) {
+	_, writer, reader := s.connectedTask(c)
+
+	expect(c, reader, fmt.Sprintf(`vcap@%s:~\$`, s.task.container.ID()))
+
+	writer.Write([]byte("ruby -e \"print('a' * 1024 * 512)\" > foo.txt\n"))
+
+	expect(c, reader, fmt.Sprintf(`vcap@%s:~\$`, s.task.container.ID()))
+
+	writer.Write([]byte("du foo.txt | awk '{print $1}'\n"))
+
+	expect(c, reader, "512")
+
+	expect(c, reader, fmt.Sprintf(`vcap@%s:~\$`, s.task.container.ID()))
+
+	writer.Write([]byte("ruby -e \"print('a' * 1024 * 1024 * 2)\" > foo.txt\n"))
+
+	expect(c, reader, "Disk quota exceeded")
 }
 
 func (s *PSSuite) connectedTask(c *C) (*exec.Cmd, io.WriteCloser, *Expector) {

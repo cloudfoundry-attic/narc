@@ -4,10 +4,17 @@ import (
 	"errors"
 )
 
+type FakeContainerProvider struct{}
+
+func (p FakeContainerProvider) ProvideContainer() (Container, error) {
+	return &FakeContainer{}, nil
+}
+
 type FakeContainer struct {
 	LastCommand string
 	ShouldError bool
 	Handle      string
+	Destroyed   bool
 
 	LimitedMemory *uint64
 	LimitedDisk   *uint64
@@ -18,6 +25,7 @@ func (c *FakeContainer) ID() string {
 }
 
 func (c *FakeContainer) Destroy() error {
+	c.Destroyed = true
 	return nil
 }
 

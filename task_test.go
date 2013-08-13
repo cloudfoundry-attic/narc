@@ -3,6 +3,7 @@ package narc
 import (
 	"code.google.com/p/go.crypto/ssh"
 	. "launchpad.net/gocheck"
+	"os"
 	"os/exec"
 	"syscall"
 	"time"
@@ -30,76 +31,47 @@ type windowChangeMessage struct {
 	heightPixels uint32
 }
 
-func (s *TSuite) TestNewTaskDoesLimitsDisk(c *C) {
-	container := &FakeContainer{}
-
-	_, err := NewTask(container, TaskLimits{DiskLimitInBytes: 42}, "", nil)
-	c.Assert(err, IsNil)
-	c.Assert(*container.LimitedDisk, Equals, uint64(42))
-}
-
-func (s *TSuite) TestNewTaskDoesNotLimitDiskToZero(c *C) {
-	container := &FakeContainer{}
-
-	_, err := NewTask(container, TaskLimits{}, "", nil)
-	c.Assert(err, IsNil)
-	c.Assert(container.LimitedDisk, IsNil)
-}
-
-func (s *TSuite) TestNewTaskDoesLimitsMemory(c *C) {
-	container := &FakeContainer{}
-
-	_, err := NewTask(container, TaskLimits{MemoryLimitInBytes: 42}, "", nil)
-	c.Assert(err, IsNil)
-	c.Assert(*container.LimitedMemory, Equals, uint64(42))
-}
-
-func (s *TSuite) TestNewTaskDoesNotLimitMemoryToZero(c *C) {
-	container := &FakeContainer{}
-
-	_, err := NewTask(container, TaskLimits{}, "", nil)
-	c.Assert(err, IsNil)
-	c.Assert(container.LimitedMemory, IsNil)
-}
-
 func (s *TSuite) TestTaskRedirectsStdout(c *C) {
-	task := &Task{Command: exec.Command("echo", "hi")}
+	container := &FakeContainer{}
+	task, _ := NewTask(container, "floofy_flubber", exec.Command("echo", "hi"))
 
 	channel := NewFakeChannel([]ssh.ChannelRequest{})
 
 	reader := NewExpector(channel.readPipe, 1*time.Second)
 
-	done, closed, err := task.Attach(channel)
+	err := task.Attach(channel)
 	c.Assert(err, IsNil)
 
 	expect(c, reader, `hi\r\n`)
-
-	<-done
-	<-closed
 }
 
 func (s *TSuite) TestTaskRedirectsStderr(c *C) {
-	task := &Task{Command: exec.Command("ruby", "-e", `$stderr.puts "hi"`)}
+	container := &FakeContainer{}
+	task, _ := NewTask(
+		container,
+		"floofy_flubber",
+		exec.Command("ruby", "-e", `$stderr.puts "hi"`),
+	)
 
 	channel := NewFakeChannel([]ssh.ChannelRequest{})
 
 	reader := NewExpector(channel.readPipe, 1*time.Second)
 
-	done, closed, err := task.Attach(channel)
+	err := task.Attach(channel)
 	c.Assert(err, IsNil)
 
 	expect(c, reader, `hi\r\n`)
-
-	<-done
-	<-closed
 }
 
 func (s *TSuite) TestTaskAcceptsPTYRequests(c *C) {
-	task := &Task{
-		Command: exec.Command(
+	container := &FakeContainer{}
+	task, _ := NewTask(
+		container,
+		"floofy_flubber",
+		exec.Command(
 			"bash", "-c", "echo hello; sleep 1; tput cols; tput lines",
 		),
-	}
+	)
 
 	channel := NewFakeChannel(
 		[]ssh.ChannelRequest{
@@ -117,7 +89,7 @@ func (s *TSuite) TestTaskAcceptsPTYRequests(c *C) {
 
 	reader := NewExpector(channel.readPipe, 5*time.Second)
 
-	done, closed, err := task.Attach(channel)
+	err := task.Attach(channel)
 	c.Assert(err, IsNil)
 
 	time.Sleep(100 * time.Millisecond)
@@ -127,17 +99,17 @@ func (s *TSuite) TestTaskAcceptsPTYRequests(c *C) {
 	expect(c, reader, `hello\r\n`)
 	expect(c, reader, `100\r\n`)
 	expect(c, reader, `50\r\n`)
-
-	<-done
-	<-closed
 }
 
 func (s *TSuite) TestTaskAcceptsWindowChange(c *C) {
-	task := &Task{
-		Command: exec.Command(
+	container := &FakeContainer{}
+	task, _ := NewTask(
+		container,
+		"floofy_flubber",
+		exec.Command(
 			"bash", "-c", "echo hello; sleep 1; tput cols; tput lines",
 		),
-	}
+	)
 
 	channel := NewFakeChannel(
 		[]ssh.ChannelRequest{
@@ -154,7 +126,7 @@ func (s *TSuite) TestTaskAcceptsWindowChange(c *C) {
 
 	reader := NewExpector(channel.readPipe, 1*time.Second)
 
-	done, closed, err := task.Attach(channel)
+	err := task.Attach(channel)
 	c.Assert(err, IsNil)
 
 	time.Sleep(100 * time.Millisecond)
@@ -164,15 +136,15 @@ func (s *TSuite) TestTaskAcceptsWindowChange(c *C) {
 	expect(c, reader, `hello\r\n`)
 	expect(c, reader, `100\r\n`)
 	expect(c, reader, `50\r\n`)
-
-	<-done
-	<-closed
 }
 
 func (s *TSuite) TestTaskReportsCompletion(c *C) {
-	task := &Task{
-		Command: exec.Command("bash", "-c", "exit 42"),
-	}
+	container := &FakeContainer{}
+	task, _ := NewTask(
+		container,
+		"floofy_flubber",
+		exec.Command("bash", "-c", "exit 42"),
+	)
 
 	channel := NewFakeChannel(
 		[]ssh.ChannelRequest{
@@ -187,11 +159,91 @@ func (s *TSuite) TestTaskReportsCompletion(c *C) {
 		},
 	)
 
-	done, closed, err := task.Attach(channel)
+	done := make(chan *os.ProcessState)
+
+	c.Assert(task.ProcessState, IsNil)
+
+	task.OnComplete(func() { done <- task.ProcessState })
+
+	err := task.Attach(channel)
 	c.Assert(err, IsNil)
 
-	status := <-done
-	c.Assert(status.Sys().(syscall.WaitStatus).ExitStatus(), Equals, 42)
+	select {
+	case status := <-done:
+		c.Assert(status.Sys().(syscall.WaitStatus).ExitStatus(), Equals, 42)
 
-	<-closed
+	case <-time.After(1 * time.Second):
+		c.Error("Was not notified of task completion!")
+	}
+}
+
+func (s *TSuite) TestTaskStopDestroysContainer(c *C) {
+	container := &FakeContainer{}
+
+	task, _ := NewTask(container, "floofy_flubber", exec.Command("ls"))
+
+	c.Assert(container.Destroyed, Equals, false)
+
+	task.Stop()
+
+	c.Assert(container.Destroyed, Equals, true)
+}
+
+func (s *TSuite) TestTaskCompletionDestroysContainer(c *C) {
+	container := &FakeContainer{}
+
+	task, _ := NewTask(container, "floofy_flubber", exec.Command("bash", "-c", "exit 0"))
+
+	c.Assert(container.Destroyed, Equals, false)
+
+	called := make(chan bool)
+
+	task.OnComplete(func() { called <- true })
+
+	_, _, err := task.Start()
+	c.Assert(err, IsNil)
+
+	select {
+	case <-called:
+		c.Assert(container.Destroyed, Equals, true)
+	case <-time.After(1 * time.Second):
+		c.Error("Was not notified of task completion!")
+	}
+}
+
+func (s *TSuite) TestTaskStopReportsCompletionOfStartedTasks(c *C) {
+	container := &FakeContainer{}
+
+	task, _ := NewTask(container, "floofy_flubber", exec.Command("sleep", "100"))
+
+	called := make(chan bool)
+
+	task.OnComplete(func() { called <- true })
+
+	task.Start()
+	task.Stop()
+
+	select {
+	case <-called:
+	case <-time.After(1 * time.Second):
+		c.Error("Was not notified of task completion!")
+	}
+}
+
+func (s *TSuite) TestTaskStopDoesNotReportCompletionOfUnstartedTasks(c *C) {
+	container := &FakeContainer{}
+
+	task, _ := NewTask(container, "floofy_flubber", exec.Command("sleep", "100"))
+
+	called := make(chan bool)
+
+	task.OnComplete(func() { called <- true })
+
+	task.Stop()
+
+	select {
+	case <-called:
+		c.Error("Was notified of task completion!")
+	case <-time.After(100 * time.Millisecond):
+	}
 }

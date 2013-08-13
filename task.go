@@ -9,83 +9,74 @@ import (
 )
 
 type Task struct {
-	Container   Container
-	Limits      TaskLimits
-	SecureToken string
-	Command     *exec.Cmd
+	SecureToken  string
+	ProcessState *os.ProcessState
 
-	commandDone chan *os.ProcessState
-	pty         *os.File
+	container Container
+	command   *exec.Cmd
+
+	onCompleteCallbacks []func()
+
+	pty *os.File
 }
 
-type TaskLimits struct {
-	MemoryLimitInBytes uint64
-	DiskLimitInBytes   uint64
-}
-
-func NewTask(container Container, limits TaskLimits, secureToken string, command *exec.Cmd) (*Task, error) {
-	if limits.MemoryLimitInBytes != 0 {
-		err := container.LimitMemory(limits.MemoryLimitInBytes)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	if limits.DiskLimitInBytes != 0 {
-		err := container.LimitDisk(limits.DiskLimitInBytes)
-		if err != nil {
-			return nil, err
-		}
-	}
-
+func NewTask(container Container, secureToken string, command *exec.Cmd) (*Task, error) {
 	return &Task{
-		Container:   container,
 		SecureToken: secureToken,
-		Command:     command,
+
+		container: container,
+		command:   command,
 	}, nil
 }
 
-func (t *Task) Attach(channel ssh.Channel) (chan *os.ProcessState, chan error, error) {
-	in, out, err := t.run()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	channelClosed := make(chan error, 1)
-
-	go io.Copy(channel, out)
-
-	go func() {
-		err := t.handleChannelRequests(in, channel)
-		channelClosed <- err
-	}()
-
-	return t.commandDone, channelClosed, nil
-}
-
-func (t *Task) run() (io.Writer, io.Reader, error) {
+func (t *Task) Start() (io.Writer, io.Reader, error) {
 	if t.pty == nil {
-		pty, err := pty.Start(t.Command)
+		pty, err := pty.Start(t.command)
 		if err != nil {
 			return nil, nil, err
 		}
 
 		t.pty = pty
-		t.commandDone = t.reportExit()
+
+		go t.reportExit()
 	}
 
 	return t.pty, t.pty, nil
 }
 
-func (t *Task) reportExit() chan *os.ProcessState {
-	done := make(chan *os.ProcessState, 1)
+func (t *Task) Attach(channel ssh.Channel) error {
+	in, out, err := t.Start()
+	if err != nil {
+		return err
+	}
 
-	go func() {
-		t.Command.Wait()
-		done <- t.Command.ProcessState
-	}()
+	go io.Copy(channel, out)
+	go t.handleChannelRequests(in, channel)
 
-	return done
+	return nil
+}
+
+func (t *Task) Stop() error {
+	if t.command.Process != nil {
+		t.command.Process.Kill()
+	}
+
+	return t.container.Destroy()
+}
+
+func (t *Task) OnComplete(callback func()) {
+	t.onCompleteCallbacks = append(t.onCompleteCallbacks, callback)
+}
+
+func (t *Task) reportExit() {
+	t.command.Wait()
+	t.ProcessState = t.command.ProcessState
+
+	t.container.Destroy()
+
+	for _, callback := range t.onCompleteCallbacks {
+		go callback()
+	}
 }
 
 func (t *Task) handleChannelRequests(in io.Writer, channel ssh.Channel) error {

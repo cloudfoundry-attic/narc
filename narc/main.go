@@ -39,11 +39,11 @@ func main() {
 		return
 	}
 
-	agentConfig := narc.AgentConfig{
+	containerProvider := narc.WardenContainerProvider{
 		WardenSocketPath: config.WardenSocketPath,
 	}
 
-	agent, err := narc.NewAgent(agentConfig)
+	agent, err := narc.NewAgent(containerProvider)
 	if err != nil {
 		log.Fatal(err.Error())
 		return
@@ -61,7 +61,7 @@ func main() {
 		return
 	}
 
-	server, err := narc.NewProxyServer(agent)
+	server, err := narc.NewProxyServer(agent.Registry)
 	if err != nil {
 		log.Fatal(err.Error())
 		return

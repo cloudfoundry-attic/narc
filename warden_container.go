@@ -4,6 +4,25 @@ import (
 	"github.com/vito/gordon"
 )
 
+type WardenContainerProvider struct {
+	WardenSocketPath string
+}
+
+func (p WardenContainerProvider) ProvideContainer() (Container, error) {
+	client := warden.NewClient(
+		&warden.ConnectionInfo{
+			SocketPath: p.WardenSocketPath,
+		},
+	)
+
+	err := client.Connect()
+	if err != nil {
+		return nil, err
+	}
+
+	return NewWardenContainer(client)
+}
+
 type WardenContainer struct {
 	Handle string
 	client *warden.Client
