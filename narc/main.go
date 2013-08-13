@@ -39,8 +39,9 @@ func main() {
 		return
 	}
 
-	containerProvider := narc.WardenContainerProvider{
-		WardenSocketPath: config.WardenSocketPath,
+	containerProvider := narc.WardenTaskBackend{
+		WardenSocketPath:     config.WardenSocketPath,
+		WardenContainersPath: config.WardenContainersPath,
 	}
 
 	agent, err := narc.NewAgent(containerProvider)

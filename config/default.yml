@@ -4,7 +4,10 @@ message_bus:
   username:
   password:
 
-warden_socket: /tmp/warden.sock
+warden:
+  socket: /tmp/warden.sock
+  containers: /opt/warden/containers
+
 state_file: /tmp/narc.json
 
 advertise_interval: 10

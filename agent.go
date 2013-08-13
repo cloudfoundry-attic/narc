@@ -3,7 +3,6 @@ package narc
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"github.com/cloudfoundry/go_cfmessagebus"
 	"github.com/nu7hatch/gouuid"
 	"log"
@@ -14,11 +13,12 @@ type Agent struct {
 	ID       *uuid.UUID
 	Registry *Registry
 
-	containerProvider ContainerProvider
+	taskBackend TaskBackend
 }
 
-type ContainerProvider interface {
+type TaskBackend interface {
 	ProvideContainer() (Container, error)
+	ProvideCommand(Container) *exec.Cmd
 }
 
 type TaskLimits struct {
@@ -39,7 +39,7 @@ type stopMessage struct {
 
 var TaskNotRegistered = errors.New("task not registered")
 
-func NewAgent(containerProvider ContainerProvider) (*Agent, error) {
+func NewAgent(taskBackend TaskBackend) (*Agent, error) {
 	id, err := uuid.NewV4()
 	if err != nil {
 		return nil, err
@@ -49,7 +49,7 @@ func NewAgent(containerProvider ContainerProvider) (*Agent, error) {
 		ID:       id,
 		Registry: NewRegistry(),
 
-		containerProvider: containerProvider,
+		taskBackend: taskBackend,
 	}, nil
 }
 
@@ -112,7 +112,7 @@ func (a *Agent) startTask(guid, secureToken string, limits TaskLimits) (*Task, e
 		return nil, err
 	}
 
-	task, err := NewTask(container, secureToken, taskCommand(container))
+	task, err := NewTask(container, secureToken, a.taskBackend.ProvideCommand(container))
 	if err != nil {
 		return nil, err
 	}
@@ -120,10 +120,9 @@ func (a *Agent) startTask(guid, secureToken string, limits TaskLimits) (*Task, e
 	a.Registry.Register(guid, task)
 
 	task.OnComplete(func() {
-		//TEST ME!
-		// a.Registry.Unregister(guid)
-		// send router.unregister
-		// send task.finished
+		log.Println("task completed:", guid)
+
+		a.Registry.Unregister(guid)
 	})
 
 	return task, nil
@@ -146,7 +145,7 @@ func (a *Agent) stopTask(guid string) error {
 }
 
 func (a *Agent) createTaskContainer(limits TaskLimits) (Container, error) {
-	container, err := a.containerProvider.ProvideContainer()
+	container, err := a.taskBackend.ProvideContainer()
 	if err != nil {
 		return nil, err
 	}
@@ -166,18 +165,4 @@ func (a *Agent) createTaskContainer(limits TaskLimits) (Container, error) {
 	}
 
 	return container, nil
-}
-
-func taskCommand(container Container) *exec.Cmd {
-	wshdSocket := fmt.Sprintf(
-		"/opt/warden/containers/%s/run/wshd.sock",
-		container.ID(),
-	)
-
-	return exec.Command(
-		"sudo",
-		"/opt/warden/warden/root/linux/skeleton/bin/wsh",
-		"--socket", wshdSocket,
-		"--user", "vcap",
-	)
 }

@@ -28,11 +28,12 @@ func init() {
 }
 
 func (s *PSSuite) SetUpTest(c *C) {
-	containerProvider := WardenContainerProvider{
-		WardenSocketPath: "/tmp/warden.sock",
+	backend := WardenTaskBackend{
+		WardenSocketPath:     "/tmp/warden.sock",
+		WardenContainersPath: "/opt/warden/containers",
 	}
 
-	agent, err := NewAgent(containerProvider)
+	agent, err := NewAgent(backend)
 
 	if err != nil {
 		panic(err)
@@ -216,7 +217,7 @@ func (s *PSSuite) TestProxyServerRejectsUnknownTask(c *C) {
 	c.Assert(err, NotNil)
 }
 
-func (s *PSSuite) TestAgentTaskMemoryLimitsMakesTaskDie(c *C) {
+func (s *PSSuite) TestTaskMemoryLimitsMakesTaskDie(c *C) {
 	_, writer, reader := s.connectedTask(c)
 
 	expect(c, reader, fmt.Sprintf(`vcap@%s:~\$`, s.task.container.ID()))
@@ -230,7 +231,7 @@ func (s *PSSuite) TestAgentTaskMemoryLimitsMakesTaskDie(c *C) {
 	expect(c, reader, "Killed")
 }
 
-func (s *PSSuite) TestAgentTaskDiskLimitsEnforcesQuota(c *C) {
+func (s *PSSuite) TestTaskDiskLimitsEnforcesQuota(c *C) {
 	_, writer, reader := s.connectedTask(c)
 
 	expect(c, reader, fmt.Sprintf(`vcap@%s:~\$`, s.task.container.ID()))

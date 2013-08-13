@@ -7,11 +7,12 @@ import (
 )
 
 type Config struct {
-	MessageBus        MessageBusConfig
-	Capacity          CapacityConfig
-	AdvertiseInterval time.Duration
-	WardenSocketPath  string
-	StateFilePath     string
+	MessageBus           MessageBusConfig
+	Capacity             CapacityConfig
+	AdvertiseInterval    time.Duration
+	WardenSocketPath     string
+	WardenContainersPath string
+	StateFilePath        string
 }
 
 type MessageBusConfig struct {
@@ -41,8 +42,10 @@ var DefaultConfig = Config{
 		DiskInBytes:   1 * gigabyte,
 	},
 
-	WardenSocketPath: "/tmp/warden.sock",
-	StateFilePath:    "/tmp/narc.json",
+	WardenSocketPath:     "/tmp/warden.sock",
+	WardenContainersPath: "/opt/warden/containers",
+
+	StateFilePath: "/tmp/narc.json",
 
 	AdvertiseInterval: 10 * time.Second,
 }
@@ -59,7 +62,9 @@ func LoadConfig(configFilePath string) Config {
 	mbusUsername, _ := file.Get("message_bus.username")
 	mbusPassword, _ := file.Get("message_bus.password")
 
-	wardenSocketPath := file.Require("warden_socket")
+	wardenContainersPath := file.Require("warden.containers")
+	wardenSocketPath := file.Require("warden.socket")
+
 	stateFilePath, _ := file.Get("state_file")
 
 	capacityMemory, err := strconv.Atoi(file.Require("capacity.memory"))
@@ -92,7 +97,9 @@ func LoadConfig(configFilePath string) Config {
 
 		AdvertiseInterval: time.Duration(advertiseInterval) * time.Second,
 
-		WardenSocketPath: wardenSocketPath,
-		StateFilePath:    stateFilePath,
+		WardenSocketPath:     wardenSocketPath,
+		WardenContainersPath: wardenContainersPath,
+
+		StateFilePath: stateFilePath,
 	}
 }

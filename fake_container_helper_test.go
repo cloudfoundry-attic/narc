@@ -2,13 +2,24 @@ package narc
 
 import (
 	"errors"
+	"os/exec"
 	"sync"
 )
 
-type FakeContainerProvider struct{}
+type FakeTaskBackend struct {
+	Command *exec.Cmd
+}
 
-func (p FakeContainerProvider) ProvideContainer() (Container, error) {
+func (b FakeTaskBackend) ProvideContainer() (Container, error) {
 	return &FakeContainer{}, nil
+}
+
+func (b FakeTaskBackend) ProvideCommand(container Container) *exec.Cmd {
+	if b.Command != nil {
+		return b.Command
+	}
+
+	return exec.Command("bash", "-c", "read foo; echo $foo")
 }
 
 type FakeContainer struct {

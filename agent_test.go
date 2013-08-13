@@ -3,6 +3,7 @@ package narc
 import (
 	"github.com/cloudfoundry/go_cfmessagebus/mock_cfmessagebus"
 	. "launchpad.net/gocheck"
+	"time"
 )
 
 type ASuite struct {
@@ -25,12 +26,12 @@ func (s *ASuite) FakeContainerForGuid(c *C, guid string) *FakeContainer {
 }
 
 func (s *ASuite) SetUpTest(c *C) {
-	agent, err := NewAgent(FakeContainerProvider{})
+	s.MessageBus = mock_cfmessagebus.NewMockMessageBus()
 
+	agent, err := NewAgent(FakeTaskBackend{})
 	c.Assert(err, IsNil)
 
 	s.Agent = agent
-	s.MessageBus = mock_cfmessagebus.NewMockMessageBus()
 
 	err = agent.HandleStarts(s.MessageBus)
 	c.Assert(err, IsNil)
@@ -110,11 +111,32 @@ func (s *ASuite) TestAgentTeardownNotExistantContainer(c *C) {
 	c.Assert(found, Equals, true)
 }
 
+func (s *ASuite) TestAgentUnregistersTaskOnCompletion(c *C) {
+	s.MessageBus.PublishSync("task.start", []byte(`
+	    {"task":"some-guid","secure_token":"some-token","memory_limit":32,"disk_limit":1}
+	`))
+
+	task, found := s.Agent.Registry.Lookup("some-guid")
+	c.Assert(found, Equals, true)
+
+	c.Assert(task.SecureToken, Equals, "some-token")
+	c.Assert(task.container, NotNil)
+
+	task.Start()
+	task.Stop()
+
+	// give agent time to unregister
+	time.Sleep(100 * time.Millisecond)
+
+	_, found = s.Agent.Registry.Lookup("some-guid")
+	c.Assert(found, Equals, false)
+}
+
 func (s *ASuite) TestAgentIDIsUnique(c *C) {
-	agent1, err := NewAgent(WardenContainerProvider{})
+	agent1, err := NewAgent(WardenTaskBackend{})
 	c.Assert(err, IsNil)
 
-	agent2, err := NewAgent(WardenContainerProvider{})
+	agent2, err := NewAgent(WardenTaskBackend{})
 	c.Assert(err, IsNil)
 
 	c.Assert(agent1.ID, Not(Equals), agent2.ID)
