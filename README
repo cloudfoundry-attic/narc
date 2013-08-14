@@ -1,25 +1,27 @@
 
 
+                  88
+              .d888888b
+              d8P 88 "8b
+              Y8b.88        88888b.   8888b.  888d888 .d8888b
+              "Y88888b.     888 "88b     "88b 888P"  d88P"
+                  88 "8b    888  888 .d888888 888    888
+              Y8b 88 .8P    888  888 888  888 888    Y88b.
+               "Y8888P"     888  888 "Y888888 888     "Y8888P
+                  88
 
 
-
-
-              TODO: image of narc
-
-
-
-
-
-                        ____ _____ _______   ____
-                       /    \\__  \\_  __ \_/ ___\
-                      |   |  \/ __ \|  | \/\  \___
-                      |___|  (____  /__|    \___  >
-                           \/     \/            \/
+                       $ nearly a real console
 
 
 = About
 
-Provisioner of a warden shell and also injector of warden shell commands.
+Provides interactive console access to fresh new throwaway containers. As soon
+as the task is complete (whether it's an interactive bash session or a one-off
+command), the container is destroyed and the task goes away.
+
+Containers are spun up and torn down over NATS, and connected to via a
+lightweight SSH server.
 
 
 = Usage
