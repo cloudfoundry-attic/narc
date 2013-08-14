@@ -78,6 +78,21 @@ func (s *ASuite) TestAgentTaskLifecycle(c *C) {
 	c.Assert(container.IsDestroyed(), Equals, true)
 }
 
+func (s *ASuite) TestAgentIgnoresDuplicateStarts(c *C) {
+	s.MessageBus.PublishSync("task.start", []byte(`
+	    {"task":"some-guid","secure_token":"some-token","memory_limit":32,"disk_limit":1}
+	`))
+
+	s.MessageBus.PublishSync("task.start", []byte(`
+	    {"task":"some-guid","secure_token":"some-other-token","memory_limit":32,"disk_limit":1}
+	`))
+
+	task, found := s.Agent.Registry.Lookup("some-guid")
+	c.Assert(found, Equals, true)
+
+	c.Assert(task.SecureToken, Equals, "some-token")
+}
+
 func (s *ASuite) TestAgentTeardownNotExistantContainer(c *C) {
 	s.MessageBus.PublishSync("task.stop", []byte(`{"task":"abc"}`))
 

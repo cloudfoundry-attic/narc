@@ -48,6 +48,7 @@ type stopMessage struct {
 }
 
 var TaskNotRegistered = errors.New("task not registered")
+var TaskAlreadyRegistered = errors.New("task already registered")
 
 func NewAgent(taskBackend TaskBackend, routerClient gibson.RouterClient, port int) (*Agent, error) {
 	id, err := uuid.NewV4()
@@ -120,6 +121,11 @@ func (a *Agent) handleStop(stop stopMessage) {
 }
 
 func (a *Agent) startTask(guid, secureToken string, limits TaskLimits) (*Task, error) {
+	_, present := a.Registry.Lookup(guid)
+	if present {
+		return nil, TaskAlreadyRegistered
+	}
+
 	container, err := a.createTaskContainer(limits)
 	if err != nil {
 		return nil, err
