@@ -7,12 +7,12 @@ import (
 )
 
 type Config struct {
+	Host                 string
 	MessageBus           MessageBusConfig
 	Capacity             CapacityConfig
 	AdvertiseInterval    time.Duration
 	WardenSocketPath     string
 	WardenContainersPath string
-	StateFilePath        string
 }
 
 type MessageBusConfig struct {
@@ -32,6 +32,8 @@ var megabyte = kilobyte * 1024
 var gigabyte = megabyte * 1024
 
 var DefaultConfig = Config{
+	Host: "127.0.0.1",
+
 	MessageBus: MessageBusConfig{
 		Host: "127.0.0.1",
 		Port: 4222,
@@ -45,13 +47,13 @@ var DefaultConfig = Config{
 	WardenSocketPath:     "/tmp/warden.sock",
 	WardenContainersPath: "/opt/warden/containers",
 
-	StateFilePath: "/tmp/narc.json",
-
 	AdvertiseInterval: 10 * time.Second,
 }
 
 func LoadConfig(configFilePath string) Config {
 	file := yaml.ConfigFile(configFilePath)
+
+	host := file.Require("host")
 
 	mbusHost := file.Require("message_bus.host")
 	mbusPort, err := strconv.Atoi(file.Require("message_bus.port"))
@@ -64,8 +66,6 @@ func LoadConfig(configFilePath string) Config {
 
 	wardenContainersPath := file.Require("warden.containers")
 	wardenSocketPath := file.Require("warden.socket")
-
-	stateFilePath, _ := file.Get("state_file")
 
 	capacityMemory, err := strconv.Atoi(file.Require("capacity.memory"))
 	if err != nil {
@@ -83,6 +83,8 @@ func LoadConfig(configFilePath string) Config {
 	}
 
 	return Config{
+		Host: host,
+
 		MessageBus: MessageBusConfig{
 			Host:     mbusHost,
 			Port:     mbusPort,
@@ -99,7 +101,5 @@ func LoadConfig(configFilePath string) Config {
 
 		WardenSocketPath:     wardenSocketPath,
 		WardenContainersPath: wardenContainersPath,
-
-		StateFilePath: stateFilePath,
 	}
 }

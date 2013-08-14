@@ -46,7 +46,7 @@ func main() {
 		WardenContainersPath: config.WardenContainersPath,
 	}
 
-	routerClient := gibson.NewCFRouterClient("127.0.0.1", mbus)
+	routerClient := gibson.NewCFRouterClient(config.Host, mbus)
 	routerClient.Greet()
 
 	proxyServerPort := 8081
