@@ -6,7 +6,7 @@ import (
 
 	"github.com/cloudfoundry/gibson"
 	"github.com/cloudfoundry/go_cfmessagebus"
-	"github.com/vito/narc"
+	"github.com/cloudfoundry/narc"
 )
 
 var configFile = flag.String("config", "", "path to config file")

@@ -3,7 +3,7 @@ package narc
 import (
 	"bytes"
 	"code.google.com/p/goprotobuf/proto"
-	"github.com/vito/gordon"
+	"github.com/cloudfoundry/gordon"
 	. "launchpad.net/gocheck"
 )
 

@@ -5,7 +5,7 @@ import (
 	"code.google.com/p/goprotobuf/proto"
 	"errors"
 	"fmt"
-	"github.com/vito/gordon"
+	"github.com/cloudfoundry/gordon"
 	. "launchpad.net/gocheck"
 	"net"
 	"strconv"

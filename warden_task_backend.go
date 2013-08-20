@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os/exec"
 
-	"github.com/vito/gordon"
+	"github.com/cloudfoundry/gordon"
 )
 
 type WardenTaskBackend struct {

@@ -1,7 +1,7 @@
 package narc
 
 import (
-	"github.com/vito/gordon"
+	"github.com/cloudfoundry/gordon"
 )
 
 type WardenContainer struct {
