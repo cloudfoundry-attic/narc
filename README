@@ -23,6 +23,17 @@ command), the container is destroyed and the task goes away.
 Containers are spun up and torn down over NATS, and connected to via a
 lightweight SSH server.
 
+= Running tests
+
+librarian-chef install
+vagrant up
+vagrant ssh
+gvm install go1.1.2 (one-time thing)
+gvm use go1.1.2
+cd /workspace
+export GOPATH=$PWD
+cd src/github.com/cloudfoundry/narc
+go test -gocheck.v
 
 = Usage
 
