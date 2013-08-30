@@ -6,6 +6,7 @@ Vagrant.configure("2") do |config|
 
   config.vm.synced_folder ENV["GOPATH"], "/workspace"
   config.vm.synced_folder File.expand_path("~/workspace"), "/real-workspace"
+  config.vm.synced_folder File.expand_path("~/workspace/container_tools"), "/container_tools"
 
   config.vm.provider :virtualbox do |v, override|
     v.customize ["modifyvm", :id, "--memory", 3*1024]
