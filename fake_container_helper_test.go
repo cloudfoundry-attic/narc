@@ -10,8 +10,11 @@ type FakeTaskBackend struct {
 	Command *exec.Cmd
 }
 
-func (b FakeTaskBackend) ProvideContainer() (Container, error) {
-	return &FakeContainer{}, nil
+func (b FakeTaskBackend) ProvideContainer(limits TaskLimits) (Container, error) {
+	return &FakeContainer{
+		LimitedDisk: &limits.DiskLimitInBytes,
+		LimitedMemory: &limits.MemoryLimitInBytes,
+	}, nil
 }
 
 func (b FakeTaskBackend) ProvideCommand(container Container) *exec.Cmd {

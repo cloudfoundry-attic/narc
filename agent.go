@@ -27,13 +27,8 @@ type RouterRegistrar interface {
 }
 
 type TaskBackend interface {
-	ProvideContainer() (Container, error)
+	ProvideContainer(TaskLimits) (Container, error)
 	ProvideCommand(Container) *exec.Cmd
-}
-
-type TaskLimits struct {
-	MemoryLimitInBytes uint64
-	DiskLimitInBytes   uint64
 }
 
 type startMessage struct {
@@ -59,15 +54,13 @@ func NewAgent(taskBackend TaskBackend, routerClient gibson.RouterClient, port in
 	return &Agent{
 		ID:       id,
 		Registry: NewRegistry(),
-
 		taskBackend: taskBackend,
-
 		routerClient: routerClient,
 		routerPort:   port,
 	}, nil
 }
 
-func (a *Agent) HandleStarts(mbus cfmessagebus.MessageBus) error {
+func (agent *Agent) HandleStarts(mbus cfmessagebus.MessageBus) error {
 	return mbus.Subscribe("task.start", func(payload []byte) {
 		var start startMessage
 
@@ -77,11 +70,11 @@ func (a *Agent) HandleStarts(mbus cfmessagebus.MessageBus) error {
 			return
 		}
 
-		a.handleStart(start)
+		agent.handleStart(start)
 	})
 }
 
-func (a *Agent) HandleStops(mbus cfmessagebus.MessageBus) error {
+func (agent *Agent) HandleStops(mbus cfmessagebus.MessageBus) error {
 	return mbus.Subscribe("task.stop", func(payload []byte) {
 		var stop stopMessage
 
@@ -91,58 +84,59 @@ func (a *Agent) HandleStops(mbus cfmessagebus.MessageBus) error {
 			return
 		}
 
-		a.handleStop(stop)
+		agent.handleStop(stop)
 	})
 }
 
-func (a *Agent) handleStart(start startMessage) {
+func (agent *Agent) handleStart(start startMessage) {
 	log.Printf("creating task %s\n", start.Task)
-
 	limits := TaskLimits{
-		MemoryLimitInBytes: start.MemoryLimitInMegabytes * 1024 * 1024,
-		DiskLimitInBytes:   start.DiskLimitInMegabytes * 1024 * 1024,
+		MemoryLimitInBytes: start.MemoryLimitInMegabytes*1024*1024,
+		DiskLimitInBytes:   start.DiskLimitInMegabytes*1024*1024,
+	}
+	if !limits.IsValid() {
+		log.Printf("Must specify memory and disk: %s\n", limits)
+		return
 	}
 
-	_, err := a.startTask(start.Task, start.SecureToken, limits)
+	_, err := agent.startTask(start.Task, start.SecureToken, limits)
 	if err != nil {
 		log.Printf("failed to create task: %s\n", err)
-		return
 	}
 }
 
-func (a *Agent) handleStop(stop stopMessage) {
+func (agent *Agent) handleStop(stop stopMessage) {
 	log.Printf("stopping task %s\n", stop.Task)
 
-	err := a.stopTask(stop.Task)
+	err := agent.stopTask(stop.Task)
 	if err != nil {
 		log.Printf("failed to stop task: %s\n", err)
-		return
 	}
 }
 
-func (a *Agent) startTask(guid, secureToken string, limits TaskLimits) (*Task, error) {
-	_, present := a.Registry.Lookup(guid)
+func (agent *Agent) startTask(guid, secureToken string, limits TaskLimits) (*Task, error) {
+	_, present := agent.Registry.Lookup(guid)
 	if present {
 		return nil, TaskAlreadyRegistered
 	}
 
-	container, err := a.createTaskContainer(limits)
+	container, err := agent.createTaskContainer(limits)
 	if err != nil {
 		return nil, err
 	}
 
-	task, err := NewTask(container, secureToken, a.taskBackend.ProvideCommand(container))
+	task, err := NewTask(container, secureToken, agent.taskBackend.ProvideCommand(container))
 	if err != nil {
 		return nil, err
 	}
 
-	a.Registry.Register(guid, task)
+	agent.Registry.Register(guid, task)
 
-	a.routerClient.Register(a.routerPort, guid)
+	agent.routerClient.Register(agent.routerPort, guid)
 
 	task.OnComplete(func() {
 		log.Println("task completed:", guid)
-		a.cleanUpGuid(guid)
+		agent.cleanUpGuid(guid)
 	})
 
 	return task, nil
@@ -169,25 +163,10 @@ func (a *Agent) cleanUpGuid(guid string) {
 	a.Registry.Unregister(guid)
 }
 
-func (a *Agent) createTaskContainer(limits TaskLimits) (Container, error) {
-	container, err := a.taskBackend.ProvideContainer()
+func (agent *Agent) createTaskContainer(limits TaskLimits) (Container, error) {
+	container, err := agent.taskBackend.ProvideContainer(limits)
 	if err != nil {
 		return nil, err
 	}
-
-	if limits.MemoryLimitInBytes != 0 {
-		err := container.LimitMemory(limits.MemoryLimitInBytes)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	if limits.DiskLimitInBytes != 0 {
-		err := container.LimitDisk(limits.DiskLimitInBytes)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	return container, nil
 }

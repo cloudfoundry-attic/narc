@@ -3,8 +3,6 @@ package narc
 import (
 	"fmt"
 	"os/exec"
-
-	"github.com/cloudfoundry/gordon"
 )
 
 type WardenTaskBackend struct {
@@ -12,19 +10,8 @@ type WardenTaskBackend struct {
 	WardenSocketPath     string
 }
 
-func (p WardenTaskBackend) ProvideContainer() (Container, error) {
-	client := warden.NewClient(
-		&warden.ConnectionInfo{
-			SocketPath: p.WardenSocketPath,
-		},
-	)
-
-	err := client.Connect()
-	if err != nil {
-		return nil, err
-	}
-
-	return NewWardenContainer(client)
+func (p WardenTaskBackend) ProvideContainer(limits TaskLimits) (Container, error) {
+	return NewWardenContainer(p.WardenSocketPath, limits)
 }
 
 func (p WardenTaskBackend) ProvideCommand(container Container) *exec.Cmd {

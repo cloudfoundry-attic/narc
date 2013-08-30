@@ -2,9 +2,7 @@ package narc
 
 import (
 	. "launchpad.net/gocheck"
-
 	"time"
-
 	"github.com/cloudfoundry/gibson/fake_router_client"
 	"github.com/cloudfoundry/go_cfmessagebus/mock_cfmessagebus"
 )
@@ -165,13 +163,14 @@ func (s *ASuite) TestAgentTaskCreationDoesDiskLimits(c *C) {
 	c.Assert(*container.LimitedDisk, Equals, uint64(32*1024*1024))
 }
 
-func (s *ASuite) TestNewTaskDoesNotLimitDiskToZero(c *C) {
+func (s *ASuite) TestAgentNewTaskDoesNotCreateATaskWhenNoDiskLimit(c *C) {
 	s.MessageBus.PublishSync("task.start", []byte(`
 	    {"task":"some-guid","secure_token":"some-token","memory_limit":1}
 	`))
 
-	container := s.FakeContainerForGuid(c, "some-guid")
-	c.Assert(container.LimitedDisk, IsNil)
+	task, found := s.Agent.Registry.Lookup("some-guid")
+	c.Assert(found, Equals, false)
+	c.Assert(task, IsNil)
 }
 
 func (s *ASuite) TestAgentTaskCreationDoesMemoryLimits(c *C) {
@@ -183,11 +182,12 @@ func (s *ASuite) TestAgentTaskCreationDoesMemoryLimits(c *C) {
 	c.Assert(*container.LimitedMemory, Equals, uint64(3*1024*1024))
 }
 
-func (s *ASuite) TestNewTaskDoesNotLimitMemoryToZero(c *C) {
+func (s *ASuite) TestAgentNewTaskDoesNotCreateATaskWhenNoMemoryLimit(c *C) {
 	s.MessageBus.PublishSync("task.start", []byte(`
 	    {"task":"some-guid","secure_token":"some-token","disk_limit":4}
 	`))
 
-	container := s.FakeContainerForGuid(c, "some-guid")
-	c.Assert(container.LimitedMemory, IsNil)
+	task, found := s.Agent.Registry.Lookup("some-guid")
+	c.Assert(found, Equals, false)
+	c.Assert(task, IsNil)
 }

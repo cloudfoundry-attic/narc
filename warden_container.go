@@ -1,7 +1,9 @@
 package narc
 
 import (
+	"encoding/json"
 	"github.com/cloudfoundry/gordon"
+	"os/exec"
 )
 
 type WardenContainer struct {
@@ -9,14 +11,74 @@ type WardenContainer struct {
 	client *warden.Client
 }
 
-func NewWardenContainer(client *warden.Client) (*WardenContainer, error) {
-	response, err := client.Create()
+type CreateContainerMessage struct {
+	WardenSocketPath string `json:"warden_socket_path"`
+	DiskLimit        uint64 `json:"disk_limit"`
+	MemoryLimit      uint64 `json:"memory_limit"`
+	Network          bool   `json:"network"`
+}
+
+type CreateContainerResponse struct {
+	Handle               string `json:"handle"`
+	HostPort             int    `json:"host_port"`
+	ContainerPort        int    `json:"container_port"`
+	ConsoleHostPort      int    `json:"console_host_port"`
+	ConsoleContainerPort int    `json:"console_container_port"`
+}
+
+func RunWithJson(request interface{}, response interface{}, cmd *exec.Cmd) error {
+	stdin, _ := cmd.StdinPipe()
+	stdout, _ := cmd.StdoutPipe()
+
+	err := cmd.Start()
+	if err != nil {
+		return err
+	}
+
+	json.NewEncoder(stdin).Encode(request)
+	stdin.Close()
+
+	err = json.NewDecoder(stdout).Decode(response)
+	if err != nil {
+		return err
+	}
+
+	err = cmd.Wait()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func NewWardenContainer(wardenSocketPath string, limits TaskLimits) (*WardenContainer, error) {
+	message := CreateContainerMessage{
+		WardenSocketPath: wardenSocketPath,
+		MemoryLimit:      limits.MemoryLimitInBytes,
+		DiskLimit:        limits.DiskLimitInBytes,
+		Network:          true,
+	}
+	var response CreateContainerResponse
+	cmd := exec.Command("create_warden_container.sh")
+
+	err := RunWithJson(&message, &response, cmd)
+
+	if err != nil {
+		return nil, err
+	}
+
+	client := warden.NewClient(
+		&warden.ConnectionInfo{
+			SocketPath: wardenSocketPath,
+		},
+	)
+
+	err = client.Connect()
 	if err != nil {
 		return nil, err
 	}
 
 	return &WardenContainer{
-		Handle: *response.Handle,
+		Handle: response.Handle,
 		client: client,
 	}, nil
 }
@@ -38,37 +100,5 @@ func (c *WardenContainer) Run(script string) (*JobInfo, error) {
 
 	return &JobInfo{
 		ExitStatus: res.GetExitStatus(),
-	}, nil
-}
-
-func (c *WardenContainer) NetIn() (MappedPort, error) {
-	res, err := c.client.NetIn(c.Handle)
-	if err != nil {
-		return 0, err
-	}
-
-	return MappedPort(res.GetHostPort()), nil
-}
-
-func (c *WardenContainer) LimitMemory(limit uint64) error {
-	_, err := c.client.LimitMemory(c.Handle, limit)
-
-	return err
-}
-
-func (c *WardenContainer) LimitDisk(limit uint64) error {
-	_, err := c.client.LimitDisk(c.Handle, limit)
-
-	return err
-}
-
-func (c *WardenContainer) Info() (*ContainerInfo, error) {
-	info, err := c.client.Info(c.Handle)
-	if err != nil {
-		return nil, err
-	}
-
-	return &ContainerInfo{
-		MemoryLimitInBytes: info.GetMemoryStat().GetHierarchicalMemoryLimit(),
 	}, nil
 }
