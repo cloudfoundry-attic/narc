@@ -12,7 +12,7 @@ type FakeTaskBackend struct {
 
 func (b FakeTaskBackend) ProvideContainer(limits TaskLimits) (Container, error) {
 	return &FakeContainer{
-		LimitedDisk: &limits.DiskLimitInBytes,
+		LimitedDisk:   &limits.DiskLimitInBytes,
 		LimitedMemory: &limits.MemoryLimitInBytes,
 	}, nil
 }

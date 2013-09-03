@@ -1,10 +1,10 @@
 package narc
 
 import (
-	. "launchpad.net/gocheck"
-	"time"
 	"github.com/cloudfoundry/gibson/fake_router_client"
 	"github.com/cloudfoundry/go_cfmessagebus/mock_cfmessagebus"
+	. "launchpad.net/gocheck"
+	"time"
 )
 
 type ASuite struct {

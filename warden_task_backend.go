@@ -11,7 +11,7 @@ type WardenTaskBackend struct {
 }
 
 func (p WardenTaskBackend) ProvideContainer(limits TaskLimits) (Container, error) {
-	return NewWardenContainer(p.WardenSocketPath, limits)
+	return NewWardenContainer(p.WardenSocketPath, limits, &ContainerCreationRunnerInJson{})
 }
 
 func (p WardenTaskBackend) ProvideCommand(container Container) *exec.Cmd {

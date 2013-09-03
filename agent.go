@@ -52,9 +52,9 @@ func NewAgent(taskBackend TaskBackend, routerClient gibson.RouterClient, port in
 	}
 
 	return &Agent{
-		ID:       id,
-		Registry: NewRegistry(),
-		taskBackend: taskBackend,
+		ID:           id,
+		Registry:     NewRegistry(),
+		taskBackend:  taskBackend,
 		routerClient: routerClient,
 		routerPort:   port,
 	}, nil
@@ -91,8 +91,8 @@ func (agent *Agent) HandleStops(mbus cfmessagebus.MessageBus) error {
 func (agent *Agent) handleStart(start startMessage) {
 	log.Printf("creating task %s\n", start.Task)
 	limits := TaskLimits{
-		MemoryLimitInBytes: start.MemoryLimitInMegabytes*1024*1024,
-		DiskLimitInBytes:   start.DiskLimitInMegabytes*1024*1024,
+		MemoryLimitInBytes: start.MemoryLimitInMegabytes * 1024 * 1024,
+		DiskLimitInBytes:   start.DiskLimitInMegabytes * 1024 * 1024,
 	}
 	if !limits.IsValid() {
 		log.Printf("Must specify memory and disk: %s\n", limits)

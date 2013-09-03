@@ -1,80 +1,72 @@
 package narc
 
 import (
-	"encoding/json"
-	"io/ioutil"
+	"errors"
 	. "launchpad.net/gocheck"
-	"os"
 )
 
-type WCSuite struct{}
+type WCSuite struct {
+	fakeCmdWithJson FakeCmdWithJson
+}
+
+type FakeCmdWithJson struct {
+	request  *CreateContainerMessage
+	response *CreateContainerResponse
+	cmd      string
+
+	stubErr    error
+	stubHandle string
+}
+
+func (f *FakeCmdWithJson) Run(request *CreateContainerMessage, response *CreateContainerResponse, cmd string) error {
+	f.request = request
+	f.response = response
+	f.cmd = cmd
+
+	response.Handle = f.stubHandle
+
+	if f.stubErr != nil {
+		return f.stubErr
+	}
+
+	return nil
+}
 
 func init() {
 	Suite(&WCSuite{})
 }
 
-func (w *WCSuite) TestNewWardenContainerSuccess(c *C) {
-	wardenContainer, err := NewWardenContainer("/tmp/warden.sock",
-		TaskLimits{MemoryLimitInBytes: 4, DiskLimitInBytes: 5})
+func (s *WCSuite) TestNewWardenSendCorrectMessage(c *C) {
+	NewWardenContainer("a_socket", TaskLimits{MemoryLimitInBytes: 10, DiskLimitInBytes: 20}, &s.fakeCmdWithJson)
 
-	c.Assert(err, IsNil)
-	c.Assert(wardenContainer.ID(), NotNil)
-	fileInfor, _ := os.Stat("/opt/warden/containers/" + wardenContainer.ID())
-	c.Assert(fileInfor, NotNil)
-	_, err = wardenContainer.Run("ls")
-	c.Assert(err, IsNil)
-	err = wardenContainer.Destroy()
-	c.Assert(err, IsNil)
+	c.Assert(s.fakeCmdWithJson.cmd, Equals, "create_warden_container.sh")
+	c.Assert(s.fakeCmdWithJson.request, DeepEquals, &CreateContainerMessage{
+		WardenSocketPath: "a_socket",
+		DiskLimit:        20,
+		MemoryLimit:      10,
+		Network:          true,
+	})
 }
 
-func (w *WCSuite) TestNewWardenContainerReturningError(c *C) {
-	wardenContainer, err := NewWardenContainer(
-		"/me/dont/exist",
-		TaskLimits{MemoryLimitInBytes: 65, DiskLimitInBytes: 400})
-	c.Assert(err, NotNil)
-	c.Assert(wardenContainer, IsNil)
+func (s *WCSuite) TestNewWardenHandlesErrorsInResponse(c *C) {
+	expectedError := errors.New("adad")
+	s.fakeCmdWithJson.stubErr = expectedError
+	_, err := NewWardenContainer("a_socket", TaskLimits{MemoryLimitInBytes: 10, DiskLimitInBytes: 20}, &s.fakeCmdWithJson)
+	c.Assert(err, Equals, expectedError)
 }
 
-func (w *WCSuite) TestNewWardenContainerLimits(c *C) {
-	oldPath := os.Getenv("PATH")
-	defer os.Setenv("PATH", oldPath)
-	defer os.Remove("test.out")
-
-	tmpDir := os.TempDir()
-	newFile, err := os.Create(tmpDir + "/create_warden_container.sh")
-	if err != nil {
-		panic(err)
-	}
-	newFile.WriteString(`#!/usr/bin/env ruby
-require "json"
-contents = STDIN.read
-File.open("test.out", "w") do |f|
-f.write(contents)
-f.flush
-end
-
-puts({"handle" => "abc"}.to_json)
-`)
-	newFile.Close()
-	err = os.Chmod(newFile.Name(), 0777)
-	if err != nil {
-		panic(err)
-	}
-
-	os.Setenv("PATH", tmpDir+":"+oldPath)
-
-	wardenContainer, err := NewWardenContainer("/tmp/warden.sock",
-		TaskLimits{MemoryLimitInBytes: 40, DiskLimitInBytes: 6})
-
+func (s *WCSuite) TestNewWardenHandlesNoErrorsInResponse(c *C) {
+	s.fakeCmdWithJson.stubHandle = "abc"
+	s.fakeCmdWithJson.stubErr = nil
+	container, err := NewWardenContainer("a_socket",
+		TaskLimits{MemoryLimitInBytes: 10, DiskLimitInBytes: 20},
+		&s.fakeCmdWithJson)
 	c.Assert(err, IsNil)
-	c.Assert(wardenContainer.ID(), NotNil)
-	file, err := ioutil.ReadFile("test.out")
-	if err != nil {
-		panic(err)
-	}
-	var createRequest CreateContainerMessage
-	json.Unmarshal(file, &createRequest)
-	c.Assert(createRequest.MemoryLimit, Equals, uint64(40))
-	c.Assert(createRequest.DiskLimit, Equals, uint64(6))
-	c.Assert(createRequest.Network, Equals, true)
+	c.Assert(container.ID(), Equals, "abc")
 }
+
+// Run
+//fileInfor, _ := os.Stat("/opt/warden/containers/" + wardenContainer.ID())
+// _, err = wardenContainer.Run("ls")
+
+// Destroy

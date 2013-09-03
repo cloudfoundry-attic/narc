@@ -8,4 +8,3 @@ type TaskLimits struct {
 func (limits *TaskLimits) IsValid() bool {
 	return limits.MemoryLimitInBytes > 0 && limits.DiskLimitInBytes > 0
 }
-
