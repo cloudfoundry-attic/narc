@@ -1,0 +1,6 @@
+name             'narc'
+maintainer       'cloudfoundry'
+maintainer_email 'cf-eng@pivotallabs.com'
+description      'Installs/Configures narc'
+long_description 'Installs/Configures narc'
+version          '0.1.0'
